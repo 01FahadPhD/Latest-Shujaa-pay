@@ -1,0 +1,127 @@
+/* Import Josefin Sans font */
+@import url('https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@300;400;500;600;700&display=swap');
+
+/* Tailwind directives - use import syntax which is more reliable */
+@import "tailwindcss/base";
+@import "tailwindcss/components";
+@import "tailwindcss/utilities";
+
+:root {
+  --primary-dark: hsl(134, 61%, 41%);
+  --primary-light: hsl(134, 61%, 51%);
+}
+
+body {
+  font-family: 'Josefin Sans', sans-serif;
+}
+
+/* Custom component classes with your green theme */
+@layer components {
+  .btn-primary {
+    background-color: hsl(134, 61%, 41%);
+    color: white;
+    font-weight: 500;
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    transition: background-color 0.2s;
+  }
+  
+  .btn-primary:hover {
+    background-color: hsl(134, 61%, 51%);
+  }
+  
+  .btn-primary-gradient {
+    background: linear-gradient(135deg, hsl(134, 61%, 41%), hsl(134, 61%, 51%));
+    color: white;
+    font-weight: 500;
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    transition: all 0.3s;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  }
+  
+  .btn-primary-gradient:hover {
+    background: linear-gradient(135deg, hsl(134, 61%, 51%), hsl(134, 61%, 41%));
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  }
+  
+  .bg-primary-gradient {
+    background: linear-gradient(135deg, hsl(134, 61%, 41%), hsl(134, 61%, 51%));
+  }
+
+  .bg-primary-gradient-hover {
+    background: linear-gradient(135deg, hsl(134, 61%, 51%), hsl(134, 61%, 41%));
+  }
+
+  .gradient-text {
+    background: linear-gradient(135deg, hsl(134, 61%, 41%), hsl(134, 61%, 51%));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  
+  .card {
+    background-color: white;
+    border-radius: 0.5rem;
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    border: 1px solid #e5e7eb;
+    padding: 1.5rem;
+  }
+  
+  .input-field {
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.5rem;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  
+  .input-field:focus {
+    outline: none;
+    border-color: transparent;
+    box-shadow: 0 0 0 2px hsl(134, 61%, 41%);
+  }
+}
+
+/* Ensure proper mobile spacing for bottom nav */
+body {
+  padding-bottom: 0 !important;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(134, 61%, 41%);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(134, 61%, 51%);
+}
+
+/* Focus states for accessibility */
+button:focus,
+input:focus,
+select:focus,
+textarea:focus {
+  outline: 2px solid hsl(134, 61%, 41%);
+  outline-offset: 2px;
+}
+
+/* Loading spinner animation */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
