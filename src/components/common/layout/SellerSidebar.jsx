@@ -25,12 +25,8 @@ const SellerSidebar = ({ onClose }) => {
   ];
 
   const handleNavigation = (href) => {
-    // Redirect to 404 for uncreated pages
-    const existingPages = ['/seller/dashboard', '/seller/generate-link', '/seller/orders'];
-    if (!existingPages.includes(href)) {
-      window.location.href = '/404';
-      return;
-    }
+    // All pages are now considered "existing" to avoid 404 redirects
+    // We'll create placeholder pages for any that don't exist yet
     if (onClose) onClose();
     router.push(href);
   };

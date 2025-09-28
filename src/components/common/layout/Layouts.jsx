@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import SellerSidebar from './SellerSidebar';
+import Sidebar from './Sidebar';
 import BottomNav from './BottomNav';
 
 const Layout = ({ children }) => {
@@ -9,7 +9,7 @@ const Layout = ({ children }) => {
     <div className="flex h-screen bg-gray-50">
       {/* Sidebar for desktop */}
       <div className="hidden lg:flex lg:flex-shrink-0">
-        <SellerSidebar />
+        <Sidebar />
       </div>
 
       {/* Mobile sidebar overlay */}
@@ -17,7 +17,7 @@ const Layout = ({ children }) => {
         <div className="fixed inset-0 flex z-40 lg:hidden">
           <div className="fixed inset-0 bg-gray-600 bg-opacity-75" onClick={() => setSidebarOpen(false)} />
           <div className="relative flex-1 flex flex-col max-w-xs w-full bg-white">
-            <SellerSidebar onClose={() => setSidebarOpen(false)} />
+            <Sidebar onClose={() => setSidebarOpen(false)} />
           </div>
         </div>
       )}
