@@ -3,11 +3,10 @@ import StableLayout from '../../components/common/layout/StableLayout';
 import { 
   Phone, 
   Mail, 
-  MessageCircle, 
+  Youtube, 
   HelpCircle,
   ChevronDown,
   ChevronUp,
-  Clock,
   AlertCircle,
   CheckCircle
 } from 'lucide-react';
@@ -38,12 +37,13 @@ const SupportPage = () => {
       bgColor: 'bg-green-50'
     },
     {
-      title: 'Live Chat',
-      icon: MessageCircle,
-      primary: 'Available on website',
-      secondary: '9 AM - 9 PM (Daily)',
-      color: 'text-purple-600',
-      bgColor: 'bg-purple-50'
+      title: 'Video Tutorials',
+      icon: Youtube,
+      primary: 'Watch on YouTube',
+      secondary: 'Step-by-step product guides',
+      color: 'text-red-600',
+      bgColor: 'bg-red-50',
+      link: 'https://www.youtube.com/@ShujaaPay' // 🔗 Replace with your real channel link
     }
   ];
 
@@ -99,7 +99,13 @@ const SupportPage = () => {
               {contactMethods.map((method, index) => {
                 const Icon = method.icon;
                 return (
-                  <div key={index} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+                  <a 
+                    key={index} 
+                    href={method.link || '#'} 
+                    target={method.link ? "_blank" : "_self"} 
+                    rel="noopener noreferrer"
+                    className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow block"
+                  >
                     <div className="flex items-start space-x-4">
                       <div className={`p-3 rounded-lg ${method.bgColor}`}>
                         <Icon className={`h-6 w-6 ${method.color}`} />
@@ -116,7 +122,7 @@ const SupportPage = () => {
                         </p>
                       </div>
                     </div>
-                  </div>
+                  </a>
                 );
               })}
             </div>
