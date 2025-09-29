@@ -8,13 +8,34 @@ import {
   Download,
   Eye,
   Building,
-  Smartphone
+  Smartphone,
+  X,
+  BanknoteIcon,
+  Phone,
+  FileText,
+  Calendar as CalendarIcon
 } from 'lucide-react';
 
 const PayoutsPage = () => {
   const [dateFilter, setDateFilter] = useState('today');
   const [searchQuery, setSearchQuery] = useState('');
   const [customDateRange, setCustomDateRange] = useState({ start: '', end: '' });
+  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+  const [selectedMethod, setSelectedMethod] = useState('');
+  const [selectedAgent, setSelectedAgent] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [withdrawAmount, setWithdrawAmount] = useState('');
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [selectedPayout, setSelectedPayout] = useState(null);
+
+  // Mobile Money Agents
+  const mobileMoneyAgents = [
+    { id: 'mpesa', name: 'M-Pesa', icon: '📱' },
+    { id: 'halopesa', name: 'Halopesa', icon: '💜' },
+    { id: 'airtelmoney', name: 'Airtel Money', icon: '🔵' },
+    { id: 'mix', name: 'Mix by Yas', icon: '🎨' },
+    { id: 'azampesa', name: 'Azam Pesa', icon: '🟠' }
+  ];
 
   // KPI Stats Data - 2 boxes only
   const kpiStats = [
@@ -134,15 +155,63 @@ const PayoutsPage = () => {
     return matchesSearch;
   });
 
-  const handleViewDetails = (payoutId) => {
-    console.log('View details for:', payoutId);
-    // TODO: Implement view details logic
+  const handleViewDetails = (payout) => {
+    setSelectedPayout(payout);
+    setShowDetailsModal(true);
   };
 
   const handleWithdraw = () => {
-    console.log('Initiate withdrawal');
-    // TODO: Implement withdrawal logic
-    alert('Withdrawal request submitted!');
+    setShowWithdrawModal(true);
+    setWithdrawAmount('');
+  };
+
+  const handleMethodSelect = (method) => {
+    setSelectedMethod(method);
+    setSelectedAgent('');
+    setPhoneNumber('');
+    setWithdrawAmount('');
+  };
+
+  const handleAgentSelect = (agentId) => {
+    setSelectedAgent(agentId);
+  };
+
+  const handleWithdrawSubmit = () => {
+    if (selectedMethod === 'mobile_money') {
+      if (!selectedAgent || !phoneNumber || !withdrawAmount) {
+        alert('Please fill all required fields');
+        return;
+      }
+      
+      // Simulate mobile money withdrawal
+      console.log('Mobile Money Withdrawal:', {
+        agent: selectedAgent,
+        phoneNumber: phoneNumber,
+        amount: withdrawAmount
+      });
+
+      alert(`Withdrawal of Tsh ${parseInt(withdrawAmount).toLocaleString()} to ${mobileMoneyAgents.find(a => a.id === selectedAgent)?.name} submitted!`);
+    }
+
+    // Reset and close modal
+    setShowWithdrawModal(false);
+    setSelectedMethod('');
+    setSelectedAgent('');
+    setPhoneNumber('');
+    setWithdrawAmount('');
+  };
+
+  const closeModal = () => {
+    setShowWithdrawModal(false);
+    setSelectedMethod('');
+    setSelectedAgent('');
+    setPhoneNumber('');
+    setWithdrawAmount('');
+  };
+
+  const closeDetailsModal = () => {
+    setShowDetailsModal(false);
+    setSelectedPayout(null);
   };
 
   return (
@@ -324,11 +393,11 @@ const PayoutsPage = () => {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                           <button
-                            onClick={() => handleViewDetails(payout.id)}
-                            className="text-primary-600 hover:text-primary-900 flex items-center space-x-1"
+                            onClick={() => handleViewDetails(payout)}
+                            className="text-primary-600 hover:text-primary-900 flex items-center space-x-1 bg-primary-50 px-3 py-1 rounded-lg transition-colors"
                           >
                             <Eye className="h-4 w-4" />
-                            <span>View</span>
+                            <span>View Details</span>
                           </button>
                         </td>
                       </tr>
@@ -386,8 +455,8 @@ const PayoutsPage = () => {
                       <div className="flex justify-between">
                         <div className="text-sm text-gray-500">Actions</div>
                         <button
-                          onClick={() => handleViewDetails(payout.id)}
-                          className="text-primary-600 hover:text-primary-900 flex items-center space-x-1"
+                          onClick={() => handleViewDetails(payout)}
+                          className="text-primary-600 hover:text-primary-900 flex items-center space-x-1 bg-primary-50 px-3 py-1 rounded-lg transition-colors"
                         >
                           <Eye className="h-4 w-4" />
                           <span>View Details</span>
@@ -409,6 +478,319 @@ const PayoutsPage = () => {
           </div>
         </div>
       </div>
+
+      {/* Withdrawal Modal */}
+      {showWithdrawModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl shadow-lg w-full max-w-sm sm:max-w-md mx-auto animate-fade-in max-h-[90vh] overflow-y-auto">
+            {/* Header */}
+            <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200 sticky top-0 bg-white">
+              <div className="flex items-center">
+                <div className="bg-primary-100 p-2 rounded-lg mr-3">
+                  <BanknoteIcon className="h-5 w-5 sm:h-6 sm:w-6 text-primary-600" />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-semibold text-gray-900">Withdraw Funds</h3>
+                  <p className="text-xs sm:text-sm text-gray-600">Choose your withdrawal method</p>
+                </div>
+              </div>
+              <button
+                onClick={closeModal}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="h-4 w-4 sm:h-5 sm:w-5" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-4 sm:p-6">
+              {/* Available Balance */}
+              <div className="bg-green-50 border border-green-200 rounded-lg p-3 sm:p-4 mb-4 sm:mb-6">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs sm:text-sm font-medium text-green-800">Available Balance</span>
+                  <span className="text-base sm:text-lg font-bold text-green-900">Tsh 8,120,000</span>
+                </div>
+              </div>
+
+              {/* Payment Method Selection */}
+              {!selectedMethod ? (
+                <div className="space-y-3 sm:space-y-4">
+                  <h4 className="text-sm font-medium text-gray-700 mb-2 sm:mb-3">Select Payment Method</h4>
+                  
+                  {/* Bank Transfer Option */}
+                  <button
+                    onClick={() => handleMethodSelect('bank_transfer')}
+                    className="w-full flex items-center space-x-3 sm:space-x-4 p-3 sm:p-4 border border-gray-300 rounded-lg hover:border-primary-300 hover:bg-primary-50 transition-colors text-left"
+                  >
+                    <div className="bg-blue-100 p-2 sm:p-3 rounded-lg">
+                      <Building className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" />
+                    </div>
+                    <div className="flex-1">
+                      <h5 className="text-sm sm:text-base font-medium text-gray-900">Bank Transfer</h5>
+                      <p className="text-xs sm:text-sm text-gray-600">Direct transfer to your bank account</p>
+                    </div>
+                  </button>
+
+                  {/* Mobile Money Option */}
+                  <button
+                    onClick={() => handleMethodSelect('mobile_money')}
+                    className="w-full flex items-center space-x-3 sm:space-x-4 p-3 sm:p-4 border border-gray-300 rounded-lg hover:border-primary-300 hover:bg-primary-50 transition-colors text-left"
+                  >
+                    <div className="bg-purple-100 p-2 sm:p-3 rounded-lg">
+                      <Smartphone className="h-4 w-4 sm:h-5 sm:w-5 text-purple-600" />
+                    </div>
+                    <div className="flex-1">
+                      <h5 className="text-sm sm:text-base font-medium text-gray-900">Mobile Money</h5>
+                      <p className="text-xs sm:text-sm text-gray-600">Instant transfer to your mobile wallet</p>
+                    </div>
+                  </button>
+                </div>
+              ) : selectedMethod === 'mobile_money' ? (
+                <div className="space-y-4 sm:space-y-6">
+                  {/* Back Button */}
+                  <button
+                    onClick={() => handleMethodSelect('')}
+                    className="flex items-center text-gray-600 hover:text-gray-700 text-xs sm:text-sm font-medium"
+                  >
+                    <X className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+                    Back to Methods
+                  </button>
+
+                  {/* Mobile Money Agents */}
+                  <div>
+                    <h4 className="text-sm font-medium text-gray-700 mb-2 sm:mb-3">Select Mobile Money Agent</h4>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3">
+                      {mobileMoneyAgents.map((agent) => (
+                        <button
+                          key={agent.id}
+                          onClick={() => handleAgentSelect(agent.id)}
+                          className={`p-2 sm:p-3 border rounded-lg text-center transition-colors min-h-[80px] sm:min-h-[90px] ${
+                            selectedAgent === agent.id
+                              ? 'border-primary-500 bg-primary-50'
+                              : 'border-gray-300 hover:border-primary-300'
+                          }`}
+                        >
+                          <div className="text-xl sm:text-2xl mb-1 sm:mb-2">{agent.icon}</div>
+                          <span className="text-xs sm:text-sm font-medium text-gray-900">{agent.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Phone Number Input */}
+                  {selectedAgent && (
+                    <div className="space-y-3 sm:space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1 sm:mb-2">
+                          Enter your {mobileMoneyAgents.find(a => a.id === selectedAgent)?.name} number
+                        </label>
+                        <div className="relative">
+                          <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                          <input
+                            type="tel"
+                            value={phoneNumber}
+                            onChange={(e) => setPhoneNumber(e.target.value)}
+                            placeholder="+255 XXX XXX XXX"
+                            className="w-full pl-10 pr-4 py-2 sm:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm sm:text-base"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Amount Input */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1 sm:mb-2">
+                          Withdrawal Amount (Tsh)
+                        </label>
+                        <div className="relative">
+                          <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                          <input
+                            type="number"
+                            value={withdrawAmount}
+                            onChange={(e) => setWithdrawAmount(e.target.value)}
+                            placeholder="0"
+                            className="w-full pl-10 pr-4 py-2 sm:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm sm:text-base"
+                            min="0"
+                            max="8120000"
+                          />
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1">
+                          Available: Tsh 8,120,000
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                // Bank Transfer Content
+                <div className="space-y-4 sm:space-y-6">
+                  <button
+                    onClick={() => handleMethodSelect('')}
+                    className="flex items-center text-gray-600 hover:text-gray-700 text-xs sm:text-sm font-medium"
+                  >
+                    <X className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+                    Back to Methods
+                  </button>
+                  
+                  <div className="text-center py-4 sm:py-6">
+                    <Building className="h-12 w-12 sm:h-14 sm:w-14 text-gray-400 mx-auto mb-3 sm:mb-4" />
+                    <h4 className="text-base sm:text-lg font-semibold text-gray-900 mb-2">Bank Transfer</h4>
+                    <p className="text-sm text-gray-600 bg-yellow-50 border border-yellow-200 rounded-lg p-3 sm:p-4">
+                      Currently unavailable, will come soon
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Footer Actions */}
+            <div className="flex border-t border-gray-200 p-4 sm:p-6 sticky bottom-0 bg-white">
+              <button
+                onClick={closeModal}
+                className="flex-1 bg-gray-100 text-gray-700 py-2 sm:py-3 rounded-lg font-medium hover:bg-gray-200 transition-colors mr-2 sm:mr-3 text-sm sm:text-base"
+              >
+                Cancel
+              </button>
+              
+              {selectedMethod === 'mobile_money' && selectedAgent && phoneNumber && withdrawAmount ? (
+                <button
+                  onClick={handleWithdrawSubmit}
+                  className="flex-1 bg-primary-500 text-white py-2 sm:py-3 rounded-lg font-medium hover:bg-primary-600 transition-colors flex items-center justify-center space-x-1 sm:space-x-2 text-sm sm:text-base"
+                >
+                  <Download className="h-3 w-3 sm:h-4 sm:w-4" />
+                  <span>Withdraw</span>
+                </button>
+              ) : selectedMethod === 'bank_transfer' ? (
+                <button
+                  disabled
+                  className="flex-1 bg-gray-300 text-gray-500 py-2 sm:py-3 rounded-lg font-medium cursor-not-allowed text-sm sm:text-base"
+                >
+                  Unavailable
+                </button>
+              ) : (
+                <button
+                  disabled
+                  className="flex-1 bg-gray-300 text-gray-500 py-2 sm:py-3 rounded-lg font-medium cursor-not-allowed text-sm sm:text-base"
+                >
+                  Continue
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Payout Details Modal - Responsive */}
+      {showDetailsModal && selectedPayout && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl shadow-lg w-full max-w-xs sm:max-w-sm mx-auto animate-fade-in max-h-[85vh] overflow-y-auto">
+            {/* Header */}
+            <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200 sticky top-0 bg-white">
+              <div className="flex items-center">
+                <div className="bg-primary-100 p-2 rounded-lg mr-3">
+                  <FileText className="h-4 w-4 sm:h-5 sm:w-5 text-primary-600" />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-semibold text-gray-900">Payout Details</h3>
+                  <p className="text-xs sm:text-sm text-gray-600">Transaction information</p>
+                </div>
+              </div>
+              <button
+                onClick={closeDetailsModal}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="h-4 w-4 sm:h-5 sm:w-5" />
+              </button>
+            </div>
+
+            {/* Details Content */}
+            <div className="p-4 sm:p-6 space-y-3 sm:space-y-4">
+              <div className="grid grid-cols-2 gap-3 sm:gap-4">
+                <div>
+                  <p className="text-xs sm:text-sm font-medium text-gray-500">Payout ID</p>
+                  <p className="text-xs sm:text-sm font-semibold text-gray-900">{selectedPayout.id}</p>
+                </div>
+                <div>
+                  <p className="text-xs sm:text-sm font-medium text-gray-500">Order ID</p>
+                  <p className="text-xs sm:text-sm font-semibold text-gray-900">{selectedPayout.orderId}</p>
+                </div>
+              </div>
+
+              <div>
+                <p className="text-xs sm:text-sm font-medium text-gray-500">Product</p>
+                <p className="text-sm sm:text-base font-semibold text-gray-900">{selectedPayout.product}</p>
+              </div>
+
+              <div>
+                <p className="text-xs sm:text-sm font-medium text-gray-500">Amount</p>
+                <p className="text-base sm:text-lg font-bold text-primary-600">{formatCurrency(selectedPayout.amount)}</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 sm:gap-4">
+                <div>
+                  <p className="text-xs sm:text-sm font-medium text-gray-500">Method</p>
+                  <div className="flex items-center space-x-1 sm:space-x-2 mt-1">
+                    {selectedPayout.method === 'bank_transfer' ? (
+                      <Building className="h-3 w-3 sm:h-4 sm:w-4 text-blue-500" />
+                    ) : (
+                      <Smartphone className="h-3 w-3 sm:h-4 sm:w-4 text-purple-500" />
+                    )}
+                    <span className="text-xs sm:text-sm font-semibold text-gray-900">
+                      {methodConfig[selectedPayout.method].label}
+                    </span>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs sm:text-sm font-medium text-gray-500">Status</p>
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${statusConfig[selectedPayout.status].color}`}>
+                    {statusConfig[selectedPayout.status].label}
+                  </span>
+                </div>
+              </div>
+
+              <div>
+                <p className="text-xs sm:text-sm font-medium text-gray-500">Date</p>
+                <div className="flex items-center space-x-1 sm:space-x-2 mt-1">
+                  <CalendarIcon className="h-3 w-3 sm:h-4 sm:w-4 text-gray-400" />
+                  <p className="text-xs sm:text-sm font-semibold text-gray-900">
+                    {new Date(selectedPayout.date).toLocaleDateString('en-US', { 
+                      year: 'numeric', 
+                      month: 'short', 
+                      day: 'numeric' 
+                    })}
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-gray-50 rounded-lg p-3 sm:p-4">
+                <p className="text-xs sm:text-sm font-medium text-gray-500 mb-1 sm:mb-2">
+                  {selectedPayout.method === 'bank_transfer' ? 'Bank Details' : 'Provider Details'}
+                </p>
+                {selectedPayout.method === 'bank_transfer' ? (
+                  <div className="space-y-1">
+                    <p className="text-xs sm:text-sm font-semibold text-gray-900">{selectedPayout.bankName}</p>
+                    <p className="text-xs sm:text-sm text-gray-600">Account: {selectedPayout.accountNumber}</p>
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    <p className="text-xs sm:text-sm font-semibold text-gray-900">{selectedPayout.provider}</p>
+                    <p className="text-xs sm:text-sm text-gray-600">Phone: {selectedPayout.phoneNumber}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="flex border-t border-gray-200 p-4 sm:p-6 sticky bottom-0 bg-white">
+              <button
+                onClick={closeDetailsModal}
+                className="flex-1 bg-primary-500 text-white py-2 sm:py-3 rounded-lg font-medium hover:bg-primary-600 transition-colors text-sm sm:text-base"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </StableLayout>
   );
 };

@@ -1,6 +1,6 @@
 import React from 'react';
 import Link from 'next/link';
-import { User, Building, Phone, Mail, Lock, Eye, EyeOff, ArrowLeft } from 'lucide-react';
+import { User, Building, Phone, Mail, Lock, Eye, EyeOff, ArrowLeft, MapPin } from 'lucide-react';
 import { useState } from 'react';
 
 const SignupPage = () => {
@@ -13,9 +13,10 @@ const SignupPage = () => {
     fullName: '',
     businessName: '',
     businessType: '',
-    phoneNumber: '',
+    location: '',
     
     // Step 2
+    phoneNumber: '',
     email: '',
     password: '',
     confirmPassword: ''
@@ -31,6 +32,41 @@ const SignupPage = () => {
     'Others'
   ];
 
+  // Tanzania Regions including Zanzibar
+  const tanzaniaRegions = [
+    'Arusha',
+    'Dar es Salaam',
+    'Dodoma',
+    'Geita',
+    'Iringa',
+    'Kagera',
+    'Katavi',
+    'Kigoma',
+    'Kilimanjaro',
+    'Lindi',
+    'Manyara',
+    'Mara',
+    'Mbeya',
+    'Morogoro',
+    'Mtwara',
+    'Mwanza',
+    'Njombe',
+    'Pemba North',
+    'Pemba South',
+    'Pwani',
+    'Rukwa',
+    'Ruvuma',
+    'Shinyanga',
+    'Simiyu',
+    'Singida',
+    'Songwe',
+    'Tabora',
+    'Tanga',
+    'Zanzibar Central/South',
+    'Zanzibar North',
+    'Zanzibar Urban/West'
+  ];
+
   const handleChange = (e) => {
     setFormData({
       ...formData,
@@ -41,7 +77,7 @@ const SignupPage = () => {
   const handleStep1Submit = (e) => {
     e.preventDefault();
     // Basic validation for required fields
-    if (formData.fullName && formData.businessType && formData.phoneNumber) {
+    if (formData.fullName && formData.businessType && formData.location) {
       setCurrentStep(2);
     }
   };
@@ -49,7 +85,7 @@ const SignupPage = () => {
   const handleStep2Submit = (e) => {
     e.preventDefault();
     // Validation for step 2
-    if (formData.email && formData.password && formData.confirmPassword) {
+    if (formData.email && formData.password && formData.confirmPassword && formData.phoneNumber) {
       if (formData.password === formData.confirmPassword) {
         console.log('Account creation attempt:', formData);
         // Handle account creation logic here
@@ -171,25 +207,28 @@ const SignupPage = () => {
                   </div>
                 </div>
 
-                {/* Phone Number */}
+                {/* Location */}
                 <div>
-                  <label htmlFor="phoneNumber" className="block text-sm font-medium text-gray-700 mb-2">
-                    Phone Number *
+                  <label htmlFor="location" className="block text-sm font-medium text-gray-700 mb-2">
+                    Location (Region) *
                   </label>
                   <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <Phone className="h-5 w-5 text-gray-400" />
-                    </div>
-                    <input
-                      id="phoneNumber"
-                      name="phoneNumber"
-                      type="tel"
+                    <select
+                      id="location"
+                      name="location"
                       required
-                      value={formData.phoneNumber}
+                      value={formData.location}
                       onChange={handleChange}
-                      className="block w-full pl-10 pr-3 py-3 text-base border border-gray-300 rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-200 min-h-[44px]"
-                      placeholder="Enter your phone number"
-                    />
+                      className="block w-full pl-3 pr-10 py-3 text-base border border-gray-300 rounded-lg appearance-none focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-200 min-h-[44px] bg-white"
+                    >
+                      <option value="">Select your region</option>
+                      {tanzaniaRegions.map((region) => (
+                        <option key={region} value={region}>{region}</option>
+                      ))}
+                    </select>
+                    <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                      <MapPin className="h-5 w-5 text-gray-400" />
+                    </div>
                   </div>
                 </div>
 
@@ -213,6 +252,28 @@ const SignupPage = () => {
                   <ArrowLeft className="h-4 w-4 mr-1" />
                   Back to previous step
                 </button>
+
+                {/* Phone Number */}
+                <div>
+                  <label htmlFor="phoneNumber" className="block text-sm font-medium text-gray-700 mb-2">
+                    Phone Number *
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <Phone className="h-5 w-5 text-gray-400" />
+                    </div>
+                    <input
+                      id="phoneNumber"
+                      name="phoneNumber"
+                      type="tel"
+                      required
+                      value={formData.phoneNumber}
+                      onChange={handleChange}
+                      className="block w-full pl-10 pr-3 py-3 text-base border border-gray-300 rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-200 min-h-[44px]"
+                      placeholder="Enter your phone number"
+                    />
+                  </div>
+                </div>
 
                 {/* Email */}
                 <div>
