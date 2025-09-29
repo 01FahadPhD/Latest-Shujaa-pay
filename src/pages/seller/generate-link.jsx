@@ -70,18 +70,19 @@ const GenerateLinkPage = () => {
     setCurrentStep(1);
   };
 
-  const generateLink = () => {
-    if (validateStep2()) {
-      // Generate a mock payment link (replace with actual API call)
-      const linkId = Math.random().toString(36).substr(2, 9);
-      const mockLink = `https://shujaapay.com/pay/${linkId}`;
-      setGeneratedLink(mockLink);
-      
-      // Show success modal and clear form data
-      setShowSuccessModal(true);
-      resetForm();
-    }
-  };
+ // In the generateLink function, replace the mock link with:
+const generateLink = () => {
+  if (validateStep2()) {
+    // Generate a proper link ID
+    const linkId = Math.random().toString(36).substr(2, 9);
+    const paymentLink = `${window.location.origin}/buyer/pay/${linkId}`;
+    setGeneratedLink(paymentLink);
+    
+    // Show success modal and clear form data
+    setShowSuccessModal(true);
+    resetForm();
+  }
+};
 
   // Reset form completely
   const resetForm = () => {
