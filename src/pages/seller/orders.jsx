@@ -7,13 +7,29 @@ import {
   DollarSign,
   Clock,
   Shield,
-  Eye
+  Eye,
+  X,
+  User,
+  Phone,
+  MapPin,
+  Truck,
+  Upload,
+  CheckCircle
 } from 'lucide-react';
 
 const OrdersPage = () => {
   const [dateFilter, setDateFilter] = useState('today');
   const [searchQuery, setSearchQuery] = useState('');
   const [customDateRange, setCustomDateRange] = useState({ start: '', end: '' });
+  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [showOrderModal, setShowOrderModal] = useState(false);
+  const [showDeliveryForm, setShowDeliveryForm] = useState(false);
+  const [deliveryData, setDeliveryData] = useState({
+    destination: '',
+    estimatedArrival: '',
+    deliveryCompany: '',
+    deliveryReceipt: null
+  });
 
   // Updated KPI Stats Data - 4 boxes with money figures
   const kpiStats = [
@@ -48,7 +64,7 @@ const OrdersPage = () => {
   ];
 
   // Mock orders data with 5-stage workflow
-  const ordersData = [
+  const [ordersData, setOrdersData] = useState([
     {
       id: 'ORD-7842',
       product: 'iPhone 15 Pro',
@@ -56,7 +72,9 @@ const OrdersPage = () => {
       price: 2450000,
       status: 'waiting_payment',
       date: '2024-01-15',
-      buyerPhone: '+255 789 456 123'
+      buyerPhone: '+255 789 456 123',
+      buyerEmail: 'john.mwita@email.com',
+      shippingAddress: '123 Main Street, Dar es Salaam'
     },
     {
       id: 'ORD-7841',
@@ -65,7 +83,9 @@ const OrdersPage = () => {
       price: 3250000,
       status: 'in_escrow',
       date: '2024-01-14',
-      buyerPhone: '+255 712 345 678'
+      buyerPhone: '+255 712 345 678',
+      buyerEmail: 'sarah.j@email.com',
+      shippingAddress: '456 City Center, Arusha'
     },
     {
       id: 'ORD-7840',
@@ -74,7 +94,9 @@ const OrdersPage = () => {
       price: 850000,
       status: 'delivered',
       date: '2024-01-13',
-      buyerPhone: '+255 754 987 321'
+      buyerPhone: '+255 754 987 321',
+      buyerEmail: 'david.kim@email.com',
+      shippingAddress: '789 Hillside, Mwanza'
     },
     {
       id: 'ORD-7839',
@@ -83,7 +105,9 @@ const OrdersPage = () => {
       price: 1850000,
       status: 'completed',
       date: '2024-01-12',
-      buyerPhone: '+255 768 123 456'
+      buyerPhone: '+255 768 123 456',
+      buyerEmail: 'grace.mushi@email.com',
+      shippingAddress: '321 Beach Road, Zanzibar'
     },
     {
       id: 'ORD-7838',
@@ -92,7 +116,9 @@ const OrdersPage = () => {
       price: 950000,
       status: 'canceled',
       date: '2024-01-11',
-      buyerPhone: '+255 719 654 987'
+      buyerPhone: '+255 719 654 987',
+      buyerEmail: 'michael.b@email.com',
+      shippingAddress: '654 Market Street, Dodoma'
     },
     {
       id: 'ORD-7837',
@@ -101,9 +127,11 @@ const OrdersPage = () => {
       price: 2150000,
       status: 'waiting_payment',
       date: '2024-01-10',
-      buyerPhone: '+255 745 321 654'
+      buyerPhone: '+255 745 321 654',
+      buyerEmail: 'lisa.j@email.com',
+      shippingAddress: '987 Business District, Mbeya'
     }
-  ];
+  ]);
 
   // Status configuration
   const statusConfig = {
@@ -116,7 +144,7 @@ const OrdersPage = () => {
 
   // Format currency in Tsh
   const formatCurrency = (amount) => {
-    return `Tsh ${amount.toLocaleString()}`;
+    return `Tsh ${amount?.toLocaleString() || '0'}`;
   };
 
   // Filter orders based on search and date filter
@@ -129,9 +157,61 @@ const OrdersPage = () => {
     return matchesSearch;
   });
 
-  const handleViewDetails = (orderId) => {
-    console.log('View details for:', orderId);
-    // TODO: Implement view details logic
+  const handleViewDetails = (order) => {
+    setSelectedOrder(order);
+    
+    if (order.status === 'in_escrow') {
+      // Pre-fill delivery form with buyer info
+      setDeliveryData({
+        destination: order.shippingAddress,
+        estimatedArrival: '',
+        deliveryCompany: '',
+        deliveryReceipt: null
+      });
+      setShowDeliveryForm(true);
+    } else {
+      setShowOrderModal(true);
+    }
+  };
+
+  const handleCloseModal = () => {
+    setShowOrderModal(false);
+    setShowDeliveryForm(false);
+    setSelectedOrder(null);
+  };
+
+  const handleDeliveryInputChange = (field, value) => {
+    setDeliveryData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const handleFileUpload = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      setDeliveryData(prev => ({
+        ...prev,
+        deliveryReceipt: file
+      }));
+    }
+  };
+
+  const handleMarkDelivered = () => {
+    if (!deliveryData.destination || !deliveryData.estimatedArrival || !deliveryData.deliveryCompany || !deliveryData.deliveryReceipt) {
+      alert('Please fill all delivery information and upload receipt');
+      return;
+    }
+
+    // Update order status to delivered
+    setOrdersData(prev => prev.map(order => 
+      order.id === selectedOrder.id 
+        ? { ...order, status: 'delivered' }
+        : order
+    ));
+
+    alert('Order marked as delivered! Status updated.');
+    handleCloseModal();
   };
 
   return (
@@ -289,11 +369,11 @@ const OrdersPage = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <button
-                          onClick={() => handleViewDetails(order.id)}
-                          className="text-primary-600 hover:text-primary-900 flex items-center space-x-1"
+                          onClick={() => handleViewDetails(order)}
+                          className="text-primary-600 hover:text-primary-900 flex items-center space-x-1 bg-primary-50 hover:bg-primary-100 px-3 py-2 rounded-lg transition-colors"
                         >
                           <Eye className="h-4 w-4" />
-                          <span>View</span>
+                          <span>View Details</span>
                         </button>
                       </td>
                     </tr>
@@ -338,7 +418,7 @@ const OrdersPage = () => {
                     <div>
                       <div className="text-gray-500">Actions</div>
                       <button
-                        onClick={() => handleViewDetails(order.id)}
+                        onClick={() => handleViewDetails(order)}
                         className="text-primary-600 hover:text-primary-900 flex items-center space-x-1"
                       >
                         <Eye className="h-4 w-4" />
@@ -360,6 +440,231 @@ const OrdersPage = () => {
           </div>
         </div>
       </div>
+
+      {/* Order Details Modal */}
+      {showOrderModal && selectedOrder && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl shadow-lg max-w-md w-full">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h2 className="text-xl font-semibold text-gray-900">Order Details</h2>
+              <button onClick={handleCloseModal} className="text-gray-400 hover:text-gray-600">
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-gray-600">Order ID</p>
+                  <p className="font-medium">{selectedOrder.id}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Status</p>
+                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusConfig[selectedOrder.status].color}`}>
+                    {statusConfig[selectedOrder.status].label}
+                  </span>
+                </div>
+              </div>
+
+              <div>
+                <p className="text-sm text-gray-600">Product</p>
+                <p className="font-medium">{selectedOrder.product}</p>
+              </div>
+
+              <div>
+                <p className="text-sm text-gray-600">Amount</p>
+                <p className="font-medium text-lg">{formatCurrency(selectedOrder.price)}</p>
+              </div>
+
+              <div className="border-t pt-4">
+                <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
+                  <User className="h-5 w-5 mr-2" />
+                  Buyer Information
+                </h3>
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Full Name:</span>
+                    <span className="font-medium">{selectedOrder.buyer}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Phone:</span>
+                    <span className="font-medium">{selectedOrder.buyerPhone}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Email:</span>
+                    <span className="font-medium">{selectedOrder.buyerEmail}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Shipping Address:</span>
+                    <p className="font-medium mt-1">{selectedOrder.shippingAddress}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-between text-sm text-gray-500">
+                <span>Order Date:</span>
+                <span>{new Date(selectedOrder.date).toLocaleDateString()}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delivery Form Modal for In Escrow Orders */}
+      {showDeliveryForm && selectedOrder && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl shadow-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <div className="flex items-center space-x-3">
+                <Truck className="h-6 w-6 text-purple-500" />
+                <div>
+                  <h2 className="text-xl font-semibold text-gray-900">Mark Order as Delivered</h2>
+                  <p className="text-sm text-gray-600">{selectedOrder.id} - {selectedOrder.product}</p>
+                </div>
+              </div>
+              <button onClick={handleCloseModal} className="text-gray-400 hover:text-gray-600">
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+
+            <div className="p-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Left Column - Buyer Information */}
+                <div className="space-y-6">
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-3">Buyer Information</h3>
+                    <div className="space-y-3">
+                      <div className="flex items-center space-x-3">
+                        <User className="h-4 w-4 text-gray-500" />
+                        <div>
+                          <p className="text-sm text-gray-600">Full Name</p>
+                          <p className="font-medium">{selectedOrder.buyer}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-3">
+                        <Phone className="h-4 w-4 text-gray-500" />
+                        <div>
+                          <p className="text-sm text-gray-600">Phone Number</p>
+                          <p className="font-medium">{selectedOrder.buyerPhone}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Delivery Information Form */}
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Destination Address *
+                      </label>
+                      <div className="relative">
+                        <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                        <input
+                          type="text"
+                          value={deliveryData.destination}
+                          onChange={(e) => handleDeliveryInputChange('destination', e.target.value)}
+                          className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                          placeholder="Enter delivery address"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Estimated Time of Arrival *
+                      </label>
+                      <input
+                        type="datetime-local"
+                        value={deliveryData.estimatedArrival}
+                        onChange={(e) => handleDeliveryInputChange('estimatedArrival', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Delivery Company Name *
+                      </label>
+                      <div className="relative">
+                        <Truck className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                        <input
+                          type="text"
+                          value={deliveryData.deliveryCompany}
+                          onChange={(e) => handleDeliveryInputChange('deliveryCompany', e.target.value)}
+                          className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                          placeholder="e.g., DHL, FedEx, Local Courier"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right Column - Receipt Upload */}
+                <div className="space-y-6">
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-3">Delivery Receipt</h3>
+                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-primary-300 transition-colors">
+                      <Upload className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+                      <p className="text-sm text-gray-600 mb-2">
+                        Upload delivery receipt or proof of delivery
+                      </p>
+                      <p className="text-xs text-gray-500 mb-4">
+                        PNG, JPG, PDF up to 10MB
+                      </p>
+                      <input
+                        type="file"
+                        accept="image/png, image/jpeg, application/pdf"
+                        onChange={handleFileUpload}
+                        className="hidden"
+                        id="receipt-upload"
+                      />
+                      <label
+                        htmlFor="receipt-upload"
+                        className="inline-block bg-primary-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary-600 transition-colors cursor-pointer"
+                      >
+                        Choose File
+                      </label>
+                      {deliveryData.deliveryReceipt && (
+                        <p className="text-sm text-green-600 mt-2">
+                          ✓ {deliveryData.deliveryReceipt.name}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Order Summary */}
+                  <div className="bg-primary-50 border border-primary-200 rounded-lg p-4">
+                    <h3 className="text-lg font-semibold text-primary-800 mb-3">Order Summary</h3>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-primary-600">Product:</span>
+                        <span className="text-primary-900">{selectedOrder.product}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-primary-600">Amount:</span>
+                        <span className="text-primary-900">{formatCurrency(selectedOrder.price)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-primary-600">Current Status:</span>
+                        <span className="text-primary-900">In Escrow</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Action Button */}
+                  <button
+                    onClick={handleMarkDelivered}
+                    className="w-full flex items-center justify-center space-x-2 bg-green-500 text-white px-6 py-3 rounded-lg font-medium hover:bg-green-600 transition-colors"
+                  >
+                    <CheckCircle className="h-5 w-5" />
+                    <span>Mark as Delivered</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </StableLayout>
   );
 };
