@@ -1,5 +1,4 @@
 import React from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { 
   Home, 
@@ -10,8 +9,7 @@ import {
   Settings,
   BarChart3,
   X,
-  LogOut,
-  AlertTriangle
+  LogOut
 } from 'lucide-react';
 
 const AdminSidebar = ({ onClose }) => {
@@ -39,7 +37,8 @@ const AdminSidebar = ({ onClose }) => {
   };
 
   return (
-    <div className="flex flex-col w-64 bg-white border-r border-gray-200 h-full">
+    <div className="flex flex-col w-64 bg-white border-r border-gray-200 h-full 
+                    overflow-y-auto pb-16 lg:pb-4">
       {/* Logo and close button */}
       <div className="flex items-center justify-between px-4 py-4 border-b border-gray-200">
         <div className="flex items-center">

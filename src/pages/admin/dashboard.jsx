@@ -58,7 +58,7 @@ const AdminDashboard = () => {
         bgColor: 'bg-orange-50'
       },
       {
-        title: 'Pending Payouts',
+        title: 'In Escrow',
         value: timeFilter === 'today' ? '8' : 
                timeFilter === 'week' ? '27' : 
                timeFilter === 'month' ? '47' : '512',

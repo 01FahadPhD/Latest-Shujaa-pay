@@ -25,22 +25,18 @@ const SellerSidebar = ({ onClose }) => {
   ];
 
   const handleNavigation = (href) => {
-    // All pages are now considered "existing" to avoid 404 redirects
-    // We'll create placeholder pages for any that don't exist yet
     if (onClose) onClose();
     router.push(href);
   };
 
   const handleLogout = () => {
-    // Add logout logic here
     console.log('Logging out...');
-    // For now, redirect to login page
     if (onClose) onClose();
     router.push('/auth/login');
   };
 
   return (
-    <div className="flex flex-col w-64 bg-white border-r border-gray-200 h-full">
+    <div className="flex flex-col w-64 bg-white border-r border-gray-200 h-full pb-20">
       {/* Logo and close button */}
       <div className="flex items-center justify-between px-4 py-4 border-b border-gray-200">
         <div className="flex items-center">
@@ -83,7 +79,7 @@ const SellerSidebar = ({ onClose }) => {
       </nav>
 
       {/* User section */}
-      <div className="flex-shrink-0 border-t border-gray-200 p-4">
+      <div className="flex-shrink-0 border-t border-gray-200 p-4 mt-auto">
         <div className="flex items-center mb-3">
           <div className="flex-shrink-0">
             <div className="h-8 w-8 bg-primary-100 rounded-full flex items-center justify-center">

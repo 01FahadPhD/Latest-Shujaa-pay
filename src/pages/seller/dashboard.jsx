@@ -21,7 +21,7 @@ const Dashboard = () => {
       bgColor: 'bg-blue-50'
     },
     {
-      title: 'Pending Payouts',
+      title: 'In Escrow',
       value: 'Tsh 2,845,000',
       icon: CreditCard,
       color: 'text-orange-500',

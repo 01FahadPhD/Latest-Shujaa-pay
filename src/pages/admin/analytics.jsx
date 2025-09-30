@@ -101,7 +101,7 @@ const ReportsAnalytics = () => {
       bgColor: 'bg-green-50'
     },
     {
-      title: 'Pending Payouts',
+      title: 'In Escrow',
       value: 'Tsh 24.3M',
       icon: CreditCard,
       color: 'text-orange-600',
