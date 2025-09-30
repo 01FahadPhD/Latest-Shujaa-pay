@@ -13,7 +13,8 @@ import {
   BanknoteIcon,
   Phone,
   FileText,
-  Calendar as CalendarIcon
+  Calendar as CalendarIcon,
+  MoreVertical
 } from 'lucide-react';
 
 const PayoutsPage = () => {
@@ -27,6 +28,7 @@ const PayoutsPage = () => {
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedPayout, setSelectedPayout] = useState(null);
+  const [activeMenu, setActiveMenu] = useState(null);
 
   // Mobile Money Agents
   const mobileMoneyAgents = [
@@ -37,28 +39,7 @@ const PayoutsPage = () => {
     { id: 'azampesa', name: 'Azam Pesa', icon: '🟠' }
   ];
 
-  // KPI Stats Data - 2 boxes only
-  const kpiStats = [
-    {
-      title: 'Pending Payouts',
-      value: 'Tsh 3,450,000',
-      icon: Clock,
-      color: 'text-orange-500',
-      bgColor: 'bg-orange-50',
-      description: 'Awaiting processing'
-    },
-    {
-      title: 'Available Balance',
-      value: 'Tsh 8,120,000',
-      icon: DollarSign,
-      color: 'text-green-500',
-      bgColor: 'bg-green-50',
-      description: 'Ready to withdraw',
-      action: true
-    }
-  ];
-
-  // Mock payouts data
+  // Updated payouts data with new statuses
   const payoutsData = [
     {
       id: 'PYT-7842',
@@ -66,7 +47,7 @@ const PayoutsPage = () => {
       product: 'iPhone 15 Pro',
       amount: 2450000,
       method: 'bank_transfer',
-      status: 'completed',
+      status: 'withdrawn',
       date: '2024-01-15',
       bankName: 'CRDB Bank',
       accountNumber: '***015489'
@@ -77,7 +58,7 @@ const PayoutsPage = () => {
       product: 'MacBook Air M2',
       amount: 3250000,
       method: 'mobile_money',
-      status: 'completed',
+      status: 'in_escrow',
       date: '2024-01-14',
       provider: 'M-Pesa',
       phoneNumber: '+255 712 *** 678'
@@ -88,7 +69,7 @@ const PayoutsPage = () => {
       product: 'AirPods Pro',
       amount: 850000,
       method: 'bank_transfer',
-      status: 'pending',
+      status: 'disputed',
       date: '2024-01-13',
       bankName: 'NMB Bank',
       accountNumber: '***782341'
@@ -99,7 +80,7 @@ const PayoutsPage = () => {
       product: 'iPad Air',
       amount: 1850000,
       method: 'mobile_money',
-      status: 'completed',
+      status: 'withdrawn',
       date: '2024-01-12',
       provider: 'Tigo Pesa',
       phoneNumber: '+255 768 *** 456'
@@ -110,7 +91,7 @@ const PayoutsPage = () => {
       product: 'Apple Watch',
       amount: 950000,
       method: 'bank_transfer',
-      status: 'pending',
+      status: 'in_escrow',
       date: '2024-01-11',
       bankName: 'CRDB Bank',
       accountNumber: '***015489'
@@ -121,17 +102,18 @@ const PayoutsPage = () => {
       product: 'Samsung Galaxy S24',
       amount: 2150000,
       method: 'mobile_money',
-      status: 'completed',
+      status: 'withdrawn',
       date: '2024-01-10',
       provider: 'Airtel Money',
       phoneNumber: '+255 745 *** 654'
     }
   ];
 
-  // Status configuration
+  // Updated status configuration
   const statusConfig = {
-    pending: { label: 'Pending', color: 'bg-orange-100 text-orange-800' },
-    completed: { label: 'Completed', color: 'bg-green-100 text-green-800' }
+    withdrawn: { label: 'Withdrawn', color: 'bg-green-100 text-green-800' },
+    in_escrow: { label: 'In Escrow', color: 'bg-orange-100 text-orange-800' },
+    disputed: { label: 'Disputed', color: 'bg-red-100 text-red-800' }
   };
 
   // Method configuration
@@ -158,6 +140,7 @@ const PayoutsPage = () => {
   const handleViewDetails = (payout) => {
     setSelectedPayout(payout);
     setShowDetailsModal(true);
+    setActiveMenu(null);
   };
 
   const handleWithdraw = () => {
@@ -214,6 +197,10 @@ const PayoutsPage = () => {
     setSelectedPayout(null);
   };
 
+  const toggleMenu = (payoutId) => {
+    setActiveMenu(activeMenu === payoutId ? null : payoutId);
+  };
+
   return (
     <StableLayout>
       <div className="min-h-screen bg-gray-50 p-4 sm:p-6 lg:p-8">
@@ -225,35 +212,74 @@ const PayoutsPage = () => {
             <p className="text-gray-600">Manage your earnings and withdrawal requests</p>
           </div>
 
-          {/* KPI Stats Grid - 2 boxes only */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-            {kpiStats.map((stat, index) => (
-              <div key={index} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
-                <div className="flex items-center justify-between">
+          {/* Updated KPI Stats Grid - Withdraw on right side, double width */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+            {/* Mobile: Withdraw at top, In Escrow & Disputed side by side below */}
+            {/* Desktop: In Escrow & Disputed on left, Withdraw on right */}
+            
+            {/* Mobile & Desktop: Withdraw Box */}
+            <div className="lg:col-span-1 order-1 lg:order-3">
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow h-full">
+                <div className="flex flex-col h-full">
                   <div className="flex-1">
-                    <p className="text-sm font-medium text-gray-600 mb-1">{stat.title}</p>
-                    <p className={`text-2xl font-bold ${stat.color} mb-2`}>
-                      {stat.value}
+                    <div className="flex items-center justify-between mb-4">
+                      <p className="text-sm font-medium text-gray-600">Withdraw</p>
+                      <div className="bg-green-50 p-3 rounded-lg">
+                        <DollarSign className="h-6 w-6 text-green-500" />
+                      </div>
+                    </div>
+                    <p className="text-3xl font-bold text-green-500 mb-2">
+                      Tsh 8,120,000
                     </p>
-                    <p className="text-sm text-gray-500">{stat.description}</p>
+                    <p className="text-sm text-gray-500 mb-6">Available for withdrawal</p>
                     
-                    {/* Withdraw Button for Available Balance */}
-                    {stat.action && (
-                      <button
-                        onClick={handleWithdraw}
-                        className="mt-4 bg-primary-500 text-white px-6 py-2 rounded-lg font-medium hover:bg-primary-600 transition-colors flex items-center space-x-2"
-                      >
-                        <Download className="h-4 w-4" />
-                        <span>Withdraw Funds</span>
-                      </button>
-                    )}
-                  </div>
-                  <div className={`p-3 rounded-lg ${stat.bgColor}`}>
-                    <stat.icon className={`h-6 w-6 ${stat.color}`} />
+                    {/* Withdraw Button */}
+                    <button
+                      onClick={handleWithdraw}
+                      className="w-full bg-primary-500 text-white px-6 py-3 rounded-lg font-medium hover:bg-primary-600 transition-colors flex items-center justify-center space-x-2"
+                    >
+                      <Download className="h-4 w-4" />
+                      <span>Withdraw Funds</span>
+                    </button>
                   </div>
                 </div>
               </div>
-            ))}
+            </div>
+
+            {/* Mobile & Desktop: In Escrow & Disputed Boxes - Always side by side */}
+            <div className="lg:col-span-2 grid grid-cols-2 gap-4 order-2 lg:order-1">
+              {/* In Escrow */}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-gray-600 mb-1">In Escrow</p>
+                    <p className="text-2xl font-bold text-orange-500 mb-2">
+                      Tsh 3,450,000
+                    </p>
+                    <p className="text-sm text-gray-500">Funds held in escrow</p>
+                  </div>
+                  <div className="bg-orange-50 p-3 rounded-lg">
+                    <Clock className="h-6 w-6 text-orange-500" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Disputed/Refunded */}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-gray-600 mb-1">Disputed/Refunded</p>
+                    <p className="text-2xl font-bold text-red-500 mb-2">
+                      Tsh 1,230,000
+                    </p>
+                    <p className="text-sm text-gray-500">Under dispute or refunded</p>
+                  </div>
+                  <div className="bg-red-50 p-3 rounded-lg">
+                    <Clock className="h-6 w-6 text-red-500" />
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Control Bar - Search and Filters in same row */}
@@ -333,21 +359,19 @@ const PayoutsPage = () => {
             )}
           </div>
 
-          {/* Payouts Table */}
+          {/* Payouts Table - Consistent styling across devices */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-            {/* Desktop Table */}
-            <div className="hidden lg:block">
-              <table className="w-full">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[600px]">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Payout ID</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Order ID</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Product</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Method</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Payout ID</th>
+                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Order ID</th>
+                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Product</th>
+                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
+                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Method</th>
+                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
@@ -355,117 +379,62 @@ const PayoutsPage = () => {
                     const MethodIcon = methodConfig[payout.method].icon;
                     return (
                       <tr key={payout.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        <td className="px-3 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
                           {payout.id}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-900">
                           {payout.orderId}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-900 max-w-[120px] truncate">
                           {payout.product}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        <td className="px-3 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
                           {formatCurrency(payout.amount)}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-900">
                           <div className="flex items-center space-x-2">
                             <MethodIcon className={`h-4 w-4 ${methodConfig[payout.method].color}`} />
-                            <span>{methodConfig[payout.method].label}</span>
+                            <span className="hidden sm:inline">{methodConfig[payout.method].label}</span>
                           </div>
-                          <div className="text-gray-500 text-xs mt-1">
+                          <div className="text-gray-500 text-xs mt-1 hidden lg:block">
                             {payout.method === 'bank_transfer' 
                               ? `${payout.bankName} • ${payout.accountNumber}`
                               : `${payout.provider} • ${payout.phoneNumber}`
                             }
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusConfig[payout.status].color}`}>
+                        <td className="px-3 py-3 whitespace-nowrap">
+                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${statusConfig[payout.status].color}`}>
                             {statusConfig[payout.status].label}
                           </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {new Date(payout.date).toLocaleDateString('en-US', { 
-                            year: 'numeric', 
-                            month: 'short', 
-                            day: 'numeric' 
-                          })}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                          <button
-                            onClick={() => handleViewDetails(payout)}
-                            className="text-primary-600 hover:text-primary-900 flex items-center space-x-1 bg-primary-50 px-3 py-1 rounded-lg transition-colors"
-                          >
-                            <Eye className="h-4 w-4" />
-                            <span>View Details</span>
-                          </button>
+                        <td className="px-3 py-3 whitespace-nowrap text-sm font-medium">
+                          <div className="relative">
+                            <button
+                              onClick={() => toggleMenu(payout.id)}
+                              className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100 transition-colors"
+                            >
+                              <MoreVertical className="h-4 w-4" />
+                            </button>
+                            
+                            {activeMenu === payout.id && (
+                              <div className="absolute right-0 top-8 bg-white border border-gray-200 rounded-lg shadow-lg z-10 min-w-32">
+                                <button
+                                  onClick={() => handleViewDetails(payout)}
+                                  className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2"
+                                >
+                                  <Eye className="h-4 w-4" />
+                                  <span>View Details</span>
+                                </button>
+                              </div>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );
                   })}
                 </tbody>
               </table>
-            </div>
-
-            {/* Mobile Cards */}
-            <div className="lg:hidden divide-y divide-gray-200">
-              {filteredPayouts.map((payout) => {
-                const MethodIcon = methodConfig[payout.method].icon;
-                return (
-                  <div key={payout.id} className="p-4 hover:bg-gray-50">
-                    <div className="flex justify-between items-start mb-3">
-                      <div>
-                        <div className="font-medium text-gray-900">{payout.id}</div>
-                        <div className="text-sm text-gray-500">{payout.orderId}</div>
-                      </div>
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusConfig[payout.status].color}`}>
-                        {statusConfig[payout.status].label}
-                      </span>
-                    </div>
-                    
-                    <div className="space-y-3">
-                      <div className="flex justify-between">
-                        <div className="text-sm text-gray-500">Product</div>
-                        <div className="text-sm font-medium text-gray-900">{payout.product}</div>
-                      </div>
-                      
-                      <div className="flex justify-between">
-                        <div className="text-sm text-gray-500">Amount</div>
-                        <div className="text-sm font-medium text-gray-900">{formatCurrency(payout.amount)}</div>
-                      </div>
-                      
-                      <div className="flex justify-between">
-                        <div className="text-sm text-gray-500">Method</div>
-                        <div className="text-sm font-medium text-gray-900 flex items-center space-x-1">
-                          <MethodIcon className={`h-4 w-4 ${methodConfig[payout.method].color}`} />
-                          <span>{methodConfig[payout.method].label}</span>
-                        </div>
-                      </div>
-                      
-                      <div className="flex justify-between">
-                        <div className="text-sm text-gray-500">Date</div>
-                        <div className="text-sm font-medium text-gray-900">
-                          {new Date(payout.date).toLocaleDateString('en-US', { 
-                            month: 'short', 
-                            day: 'numeric' 
-                          })}
-                        </div>
-                      </div>
-                      
-                      <div className="flex justify-between">
-                        <div className="text-sm text-gray-500">Actions</div>
-                        <button
-                          onClick={() => handleViewDetails(payout)}
-                          className="text-primary-600 hover:text-primary-900 flex items-center space-x-1 bg-primary-50 px-3 py-1 rounded-lg transition-colors"
-                        >
-                          <Eye className="h-4 w-4" />
-                          <span>View Details</span>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
             </div>
 
             {/* Empty State */}

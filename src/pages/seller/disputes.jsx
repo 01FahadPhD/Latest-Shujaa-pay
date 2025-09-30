@@ -13,12 +13,17 @@ import {
   DollarSign,
   Calendar,
   ChevronRight,
-  X
+  X,
+  MoreVertical
 } from 'lucide-react';
 
 const DisputesPage = () => {
   const [selectedDispute, setSelectedDispute] = useState(null);
   const [showDisputeModal, setShowDisputeModal] = useState(false);
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [showResponseModal, setShowResponseModal] = useState(false);
+  const [uploadedFiles, setUploadedFiles] = useState([]);
+  const [responseText, setResponseText] = useState('');
 
   // Dispute Summary KPIs
   const disputeStats = [
@@ -199,13 +204,51 @@ const DisputesPage = () => {
   };
 
   const handleUploadEvidence = () => {
-    // TODO: Implement evidence upload logic
-    console.log('Upload evidence for:', selectedDispute?.id);
+    setShowUploadModal(true);
   };
 
   const handleRespond = () => {
-    // TODO: Implement response logic
-    console.log('Respond to dispute:', selectedDispute?.id);
+    setShowResponseModal(true);
+  };
+
+  const handleFileUpload = (event) => {
+    const files = Array.from(event.target.files);
+    setUploadedFiles(prev => [...prev, ...files]);
+  };
+
+  const handleRemoveFile = (index) => {
+    setUploadedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleSubmitEvidence = () => {
+    // TODO: Implement evidence submission logic
+    console.log('Submitting evidence:', uploadedFiles);
+    alert('Evidence submitted successfully!');
+    setShowUploadModal(false);
+    setUploadedFiles([]);
+  };
+
+  const handleSubmitResponse = () => {
+    if (!responseText.trim()) {
+      alert('Please enter your response');
+      return;
+    }
+    
+    // TODO: Implement response submission logic
+    console.log('Submitting response:', responseText);
+    alert('Response submitted successfully!');
+    setShowResponseModal(false);
+    setResponseText('');
+  };
+
+  const handleCloseUploadModal = () => {
+    setShowUploadModal(false);
+    setUploadedFiles([]);
+  };
+
+  const handleCloseResponseModal = () => {
+    setShowResponseModal(false);
+    setResponseText('');
   };
 
   return (
@@ -247,7 +290,7 @@ const DisputesPage = () => {
               <h2 className="text-xl font-semibold text-gray-900">Active Disputes</h2>
             </div>
 
-            {/* Desktop Table - Updated with better actions */}
+            {/* Desktop Table - Updated with Date & Status in same column */}
             <div className="hidden lg:block">
               <table className="w-full">
                 <thead className="bg-gray-50">
@@ -257,18 +300,13 @@ const DisputesPage = () => {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Buyer</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Product</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Updated</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date & Status</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {disputesData.map((dispute) => (
-                    <tr 
-                      key={dispute.id} 
-                      className="hover:bg-gray-50 cursor-pointer"
-                      onClick={() => handleViewDispute(dispute)}
-                    >
+                    <tr key={dispute.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                         <div className="flex items-center">
                           <AlertCircle className="h-4 w-4 text-orange-500 mr-2" />
@@ -291,26 +329,26 @@ const DisputesPage = () => {
                         {formatCurrency(dispute.amount)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${statusConfig[dispute.status].color}`}>
-                          {statusConfig[dispute.status].label}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {new Date(dispute.updatedAt).toLocaleDateString('en-US', { 
-                          month: 'short', 
-                          day: 'numeric' 
-                        })}
+                        <div className="space-y-1">
+                          <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${statusConfig[dispute.status].color}`}>
+                            {statusConfig[dispute.status].label}
+                          </span>
+                          <div className="text-xs text-gray-500">
+                            {new Date(dispute.updatedAt).toLocaleDateString('en-US', { 
+                              month: 'short', 
+                              day: 'numeric',
+                              year: 'numeric'
+                            })}
+                          </div>
+                        </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleViewDispute(dispute);
-                          }}
+                          onClick={() => handleViewDispute(dispute)}
                           className="text-primary-600 hover:text-primary-900 flex items-center space-x-2 bg-primary-50 hover:bg-primary-100 px-3 py-2 rounded-lg transition-colors"
                         >
                           <Eye className="h-4 w-4" />
-                          <span>View Details</span>
+                          <span>View More</span>
                         </button>
                       </td>
                     </tr>
@@ -322,11 +360,7 @@ const DisputesPage = () => {
             {/* Mobile Cards - Updated for consistency */}
             <div className="lg:hidden divide-y divide-gray-200">
               {disputesData.map((dispute) => (
-                <div 
-                  key={dispute.id} 
-                  className="p-4 hover:bg-gray-50 cursor-pointer"
-                  onClick={() => handleViewDispute(dispute)}
-                >
+                <div key={dispute.id} className="p-4 hover:bg-gray-50">
                   <div className="flex justify-between items-start mb-3">
                     <div className="flex items-center">
                       <AlertCircle className="h-4 w-4 text-orange-500 mr-2" />
@@ -335,9 +369,17 @@ const DisputesPage = () => {
                         <div className="text-sm text-gray-500">{dispute.orderId}</div>
                       </div>
                     </div>
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusConfig[dispute.status].color}`}>
-                      {statusConfig[dispute.status].label}
-                    </span>
+                    <div className="text-right">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusConfig[dispute.status].color}`}>
+                        {statusConfig[dispute.status].label}
+                      </span>
+                      <div className="text-xs text-gray-500 mt-1">
+                        {new Date(dispute.updatedAt).toLocaleDateString('en-US', { 
+                          month: 'short', 
+                          day: 'numeric'
+                        })}
+                      </div>
+                    </div>
                   </div>
                   
                   <div className="space-y-2 text-sm">
@@ -356,21 +398,9 @@ const DisputesPage = () => {
                       <div className="text-gray-500">Amount</div>
                       <div className="font-medium text-gray-900">{formatCurrency(dispute.amount)}</div>
                     </div>
-                    <div className="flex justify-between">
-                      <div className="text-gray-500">Last Updated</div>
-                      <div className="font-medium text-gray-900">
-                        {new Date(dispute.updatedAt).toLocaleDateString('en-US', { 
-                          month: 'short', 
-                          day: 'numeric' 
-                        })}
-                      </div>
-                    </div>
                     <div className="pt-2">
                       <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleViewDispute(dispute);
-                        }}
+                        onClick={() => handleViewDispute(dispute)}
                         className="w-full flex items-center justify-center space-x-2 bg-primary-500 text-white px-4 py-2 rounded-lg font-medium hover:bg-primary-600 transition-colors"
                       >
                         <Eye className="h-4 w-4" />
@@ -425,6 +455,29 @@ const DisputesPage = () => {
           onRespond={handleRespond}
           formatCurrency={formatCurrency}
           statusConfig={statusConfig}
+        />
+      )}
+
+      {/* Upload Evidence Modal */}
+      {showUploadModal && selectedDispute && (
+        <UploadEvidenceModal
+          dispute={selectedDispute}
+          onClose={handleCloseUploadModal}
+          uploadedFiles={uploadedFiles}
+          onFileUpload={handleFileUpload}
+          onRemoveFile={handleRemoveFile}
+          onSubmit={handleSubmitEvidence}
+        />
+      )}
+
+      {/* Response Modal */}
+      {showResponseModal && selectedDispute && (
+        <ResponseModal
+          dispute={selectedDispute}
+          onClose={handleCloseResponseModal}
+          responseText={responseText}
+          setResponseText={setResponseText}
+          onSubmit={handleSubmitResponse}
         />
       )}
     </StableLayout>
@@ -569,6 +622,206 @@ const DisputeModal = ({ dispute, onClose, onUploadEvidence, onRespond, formatCur
                   ))}
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Upload Evidence Modal Component
+const UploadEvidenceModal = ({ dispute, onClose, uploadedFiles, onFileUpload, onRemoveFile, onSubmit }) => {
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-xl shadow-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        {/* Header */}
+        <div className="flex items-center justify-between p-6 border-b border-gray-200">
+          <div className="flex items-center space-x-3">
+            <Upload className="h-6 w-6 text-primary-600" />
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900">Upload Evidence</h2>
+              <p className="text-sm text-gray-600">For dispute: {dispute.id}</p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            <X className="h-6 w-6" />
+          </button>
+        </div>
+
+        <div className="p-6">
+          <div className="space-y-6">
+            {/* File Upload Area */}
+            <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
+              <Upload className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <p className="text-lg font-medium text-gray-900 mb-2">Upload your evidence files</p>
+              <p className="text-gray-500 mb-4">
+                Upload screenshots, receipts, tracking information, or any other relevant documents
+              </p>
+              <input
+                type="file"
+                multiple
+                onChange={onFileUpload}
+                className="hidden"
+                id="evidence-upload"
+                accept=".jpg,.jpeg,.png,.pdf,.doc,.docx"
+              />
+              <label
+                htmlFor="evidence-upload"
+                className="inline-flex items-center justify-center bg-primary-500 text-white px-6 py-3 rounded-lg font-medium hover:bg-primary-600 transition-colors cursor-pointer"
+              >
+                <Upload className="h-4 w-4 mr-2" />
+                Choose Files
+              </label>
+              <p className="text-xs text-gray-500 mt-2">
+                Supported formats: JPG, PNG, PDF, DOC (Max 10MB per file)
+              </p>
+            </div>
+
+            {/* Uploaded Files List */}
+            {uploadedFiles.length > 0 && (
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-3">Selected Files</h3>
+                <div className="space-y-2">
+                  {uploadedFiles.map((file, index) => (
+                    <div key={index} className="flex items-center justify-between bg-gray-50 rounded-lg p-3">
+                      <div className="flex items-center space-x-3">
+                        <FileText className="h-4 w-4 text-gray-500" />
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">{file.name}</p>
+                          <p className="text-xs text-gray-500">
+                            {(file.size / 1024 / 1024).toFixed(2)} MB
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => onRemoveFile(index)}
+                        className="text-red-500 hover:text-red-700 transition-colors"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Additional Notes */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Additional Notes (Optional)
+              </label>
+              <textarea
+                placeholder="Add any additional context or explanation for your evidence..."
+                rows={4}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              />
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex space-x-3">
+              <button
+                onClick={onClose}
+                className="flex-1 bg-gray-100 text-gray-700 py-3 rounded-lg font-medium hover:bg-gray-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={onSubmit}
+                disabled={uploadedFiles.length === 0}
+                className="flex-1 bg-primary-500 text-white py-3 rounded-lg font-medium hover:bg-primary-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Submit Evidence
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Response Modal Component
+const ResponseModal = ({ dispute, onClose, responseText, setResponseText, onSubmit }) => {
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-xl shadow-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        {/* Header */}
+        <div className="flex items-center justify-between p-6 border-b border-gray-200">
+          <div className="flex items-center space-x-3">
+            <MessageCircle className="h-6 w-6 text-primary-600" />
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900">Respond to Dispute</h2>
+              <p className="text-sm text-gray-600">For dispute: {dispute.id}</p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            <X className="h-6 w-6" />
+          </button>
+        </div>
+
+        <div className="p-6">
+          <div className="space-y-6">
+            {/* Dispute Information */}
+            <div className="bg-gray-50 rounded-lg p-4">
+              <h3 className="text-sm font-medium text-gray-900 mb-2">Dispute Details</h3>
+              <p className="text-sm text-gray-600">
+                <strong>Buyer:</strong> {dispute.buyer} | <strong>Product:</strong> {dispute.product}
+              </p>
+              <p className="text-sm text-gray-600 mt-1">
+                <strong>Reason:</strong> {dispute.reason}
+              </p>
+            </div>
+
+            {/* Response Form */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Your Response *
+              </label>
+              <textarea
+                value={responseText}
+                onChange={(e) => setResponseText(e.target.value)}
+                placeholder="Provide your detailed response to the dispute. Include any relevant information, explanations, or proposed solutions..."
+                rows={8}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
+              />
+              <p className="text-xs text-gray-500 mt-2">
+                Be professional and clear in your response. This will be reviewed by Shujaa Pay support team.
+              </p>
+            </div>
+
+            {/* Response Tips */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <h4 className="text-sm font-medium text-blue-900 mb-2">Response Tips</h4>
+              <ul className="text-xs text-blue-800 space-y-1">
+                <li>• Be factual and provide specific details</li>
+                <li>• Include any relevant order or shipping information</li>
+                <li>• Maintain a professional and respectful tone</li>
+                <li>• Propose fair solutions when possible</li>
+              </ul>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex space-x-3">
+              <button
+                onClick={onClose}
+                className="flex-1 bg-gray-100 text-gray-700 py-3 rounded-lg font-medium hover:bg-gray-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={onSubmit}
+                disabled={!responseText.trim()}
+                className="flex-1 bg-primary-500 text-white py-3 rounded-lg font-medium hover:bg-primary-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Submit Response
+              </button>
             </div>
           </div>
         </div>
