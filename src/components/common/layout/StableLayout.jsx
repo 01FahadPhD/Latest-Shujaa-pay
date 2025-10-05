@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import Header from './Header';
+import ClientSideHeader from './ClientSideHeader';
 import SellerSidebar from './SellerSidebar';
 import AdminSidebar from './AdminSidebar';
 import BottomNav from './BottomNav';
@@ -34,7 +34,8 @@ const StableLayout = ({ children, role = 'seller' }) => {
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-        <Header onMenuClick={() => setSidebarOpen(true)} role={role} />
+        {/* Use ClientSideHeader to avoid hydration issues */}
+        <ClientSideHeader onMenuClick={() => setSidebarOpen(true)} role={role} />
         <main className="flex-1 overflow-auto pb-16 lg:pb-0">
           {children}
         </main>

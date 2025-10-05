@@ -7,6 +7,8 @@ const SignupPage = () => {
   const [currentStep, setCurrentStep] = useState(1);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
   
   const [formData, setFormData] = useState({
     // Step 1
@@ -72,6 +74,8 @@ const SignupPage = () => {
       ...formData,
       [e.target.name]: e.target.value
     });
+    // Clear error when user starts typing
+    if (error) setError('');
   };
 
   const handleStep1Submit = (e) => {
@@ -79,22 +83,78 @@ const SignupPage = () => {
     // Basic validation for required fields
     if (formData.fullName && formData.businessType && formData.location) {
       setCurrentStep(2);
+    } else {
+      setError('Please fill all required fields');
     }
   };
 
-  const handleStep2Submit = (e) => {
+  const handleStep2Submit = async (e) => {
     e.preventDefault();
-    // Validation for step 2
-    if (formData.email && formData.password && formData.confirmPassword && formData.phoneNumber) {
-      if (formData.password === formData.confirmPassword) {
-        console.log('Account creation attempt:', formData);
-        // Handle account creation logic here
+    setError('');
+
+    if (!formData.email || !formData.password || !formData.confirmPassword || !formData.phoneNumber) {
+      setError('Please fill all required fields');
+      return;
+    }
+
+    if (formData.password !== formData.confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+
+    // Password strength validation
+    if (formData.password.length < 6) {
+      setError('Password must be at least 6 characters long');
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const response = await fetch('http://localhost:5000/api/auth/register', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          fullName: formData.fullName,
+          businessName: formData.businessName,
+          businessType: formData.businessType,
+          location: formData.location,
+          phoneNumber: formData.phoneNumber,
+          email: formData.email,
+          password: formData.password
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.message || 'Registration failed. Please try again.');
+        return;
       }
+
+      // Success! Store the token in localStorage
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('user', JSON.stringify(data.user));
+      
+      // Show success message
+      alert('Account created successfully! Redirecting to dashboard...');
+
+      // Redirect to dashboard
+      window.location.href = '/seller/dashboard';
+
+    } catch (error) {
+      console.error('Registration error:', error);
+      setError('Network error. Please check your connection and try again.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const goBackToStep1 = () => {
     setCurrentStep(1);
+    setError('');
   };
 
   return (
@@ -136,6 +196,13 @@ const SignupPage = () => {
 
           {/* Form Content */}
           <div className="px-8 py-8">
+            {/* Error Message */}
+            {error && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                <p className="text-red-600 text-sm text-center">{error}</p>
+              </div>
+            )}
+
             {currentStep === 1 ? (
               /* Step 1: User & Business Details */
               <form className="space-y-5" onSubmit={handleStep1Submit}>
@@ -314,7 +381,7 @@ const SignupPage = () => {
                       value={formData.password}
                       onChange={handleChange}
                       className="block w-full pl-10 pr-10 py-3 text-base border border-gray-300 rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-200 min-h-[44px]"
-                      placeholder="Create a password"
+                      placeholder="Create a password (min. 6 characters)"
                     />
                     <button
                       type="button"
@@ -366,9 +433,21 @@ const SignupPage = () => {
                 {/* Create Account Button */}
                 <button
                   type="submit"
-                  className="w-full flex justify-center py-3 px-4 border border-transparent text-base font-medium rounded-lg text-white bg-primary-gradient hover:bg-primary-gradient-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-all duration-300 shadow-sm hover:shadow-md min-h-[44px]"
+                  disabled={isLoading}
+                  className={`w-full flex justify-center py-3 px-4 border border-transparent text-base font-medium rounded-lg text-white transition-all duration-300 shadow-sm hover:shadow-md min-h-[44px] ${
+                    isLoading 
+                      ? 'bg-gray-400 cursor-not-allowed' 
+                      : 'bg-primary-gradient hover:bg-primary-gradient-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500'
+                  }`}
                 >
-                  Create Account
+                  {isLoading ? (
+                    <div className="flex items-center">
+                      <div className="w-5 h-5 border-t-2 border-white border-solid rounded-full animate-spin mr-2"></div>
+                      Creating Account...
+                    </div>
+                  ) : (
+                    'Create Account'
+                  )}
                 </button>
               </form>
             )}

@@ -1,0 +1,9 @@
+{
+  "/_app": "pages/_app.js",
+  "/_error": "pages/_error.js",
+  "/_document": "pages/_document.js",
+  "/auth/login": "pages/auth/login.js",
+  "/seller/dashboard": "pages/seller/dashboard.js",
+  "/buyer/pay/[linkId]": "pages/buyer/pay/[linkId].js",
+  "/seller/orders": "pages/seller/orders.js"
+}

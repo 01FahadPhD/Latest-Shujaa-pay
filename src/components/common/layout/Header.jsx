@@ -18,6 +18,7 @@ const Header = ({ onMenuClick, role = 'seller' }) => {
       if (path.includes('disputes')) return 'Disputes Management';
       if (path.includes('analytics')) return 'Reports & Analytics';
       if (path.includes('settings')) return 'Admin Settings';
+      if (path.includes('profile')) return 'My Profile';
       return 'Admin Panel';
     }
     
@@ -28,28 +29,66 @@ const Header = ({ onMenuClick, role = 'seller' }) => {
     if (path.includes('payouts')) return 'Payouts';
     if (path.includes('disputes')) return 'Disputes';
     if (path.includes('support')) return 'Support';
+    if (path.includes('profile')) return 'My Profile';
     return 'Shujaa Pay';
   };
 
-  // Get user info based on role
+  // Get user info from localStorage
   const getUserInfo = () => {
+    try {
+      const userData = localStorage.getItem('user');
+      if (userData) {
+        const user = JSON.parse(userData);
+        if (role === 'admin') {
+          return {
+            name: user.fullName || 'Administrator',
+            role: 'Super Admin',
+            icon: Shield,
+            bgColor: 'bg-gradient-to-r from-green-600 to-green-500',
+            textColor: 'text-white',
+            email: user.email,
+            businessName: user.businessName
+          };
+        }
+        
+        return {
+          name: user.fullName || 'Seller',
+          role: 'Seller',
+          icon: User,
+          bgColor: 'bg-gradient-to-r from-green-600 to-green-500',
+          textColor: 'text-white',
+          email: user.email,
+          businessName: user.businessName
+        };
+      }
+    } catch (error) {
+      console.error('Error getting user info:', error);
+    }
+    
+    // Fallback data
     if (role === 'admin') {
       return {
         name: 'Administrator',
         role: 'Super Admin',
         icon: Shield,
         bgColor: 'bg-gradient-to-r from-green-600 to-green-500',
-        textColor: 'text-white'
+        textColor: 'text-white',
+        email: 'admin@shujaapay.com'
       };
     }
     
     return {
-      name: 'John Doe',
+      name: 'Seller',
       role: 'Seller',
       icon: User,
       bgColor: 'bg-gradient-to-r from-green-600 to-green-500',
-      textColor: 'text-white'
+      textColor: 'text-white',
+      email: 'seller@example.com'
     };
+  };
+
+  const handleProfileClick = () => {
+    router.push('/seller/profile');
   };
 
   const userInfo = getUserInfo();
@@ -101,7 +140,10 @@ const Header = ({ onMenuClick, role = 'seller' }) => {
           </button>
           
           {/* User profile */}
-          <div className="flex items-center space-x-3">
+          <button 
+            onClick={handleProfileClick}
+            className="flex items-center space-x-3 hover:bg-gray-50 rounded-lg px-2 py-1 transition-colors"
+          >
             <div className="hidden sm:block text-right">
               <p className="text-sm font-medium text-gray-900">
                 {userInfo.name}
@@ -114,7 +156,7 @@ const Header = ({ onMenuClick, role = 'seller' }) => {
             <div className={`w-8 h-8 ${userInfo.bgColor} rounded-full flex items-center justify-center shadow-sm`}>
               <UserIcon className={`h-4 w-4 ${userInfo.textColor}`} />
             </div>
-          </div>
+          </button>
         </div>
       </div>
 
