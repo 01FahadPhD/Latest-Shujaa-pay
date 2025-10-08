@@ -18,11 +18,15 @@ import {
   Trash2,
   AlertTriangle,
   Loader,
-  RefreshCw
+  RefreshCw,
+  ExternalLink,
+  FileText,
+  AlertCircle,
+  ChevronDown
 } from 'lucide-react';
 
 const OrdersPage = () => {
-  const [dateFilter, setDateFilter] = useState('today');
+  const [dateFilter, setDateFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [customDateRange, setCustomDateRange] = useState({ start: '', end: '' });
   const [selectedOrder, setSelectedOrder] = useState(null);
@@ -40,13 +44,15 @@ const OrdersPage = () => {
     destination: '',
     estimatedArrival: '',
     deliveryCompany: '',
-    deliveryReceipt: null,
+    deliveryReceipt: [],
     trackingNumber: '',
     notes: ''
   });
   const [showAlert, setShowAlert] = useState(false);
   const [alertMessage, setAlertMessage] = useState('');
-  const [alertType, setAlertType] = useState('success'); // 'success' or 'error'
+  const [alertType, setAlertType] = useState('success');
+  const [disputeLoading, setDisputeLoading] = useState(false);
+  const [showDateFilterDropdown, setShowDateFilterDropdown] = useState(false);
 
   // Status configuration - UPDATED with complete workflow
   const statusConfig = {
@@ -65,7 +71,19 @@ const OrdersPage = () => {
     cancelled: { label: 'Canceled', color: 'bg-red-100 text-red-800', canDelete: false }
   };
 
-  // ✅ NEW: System alert function
+  // ✅ UPDATED: Time filter options as dropdown with "All Time" as default
+  const timeFilterOptions = [
+    { value: 'all', label: 'All Time' },
+    { value: 'today', label: 'Today' },
+    { value: 'week', label: 'This Week' },
+    { value: 'month', label: 'This Month' },
+    { value: 'custom', label: 'Custom Range' }
+  ];
+
+  // API Base URL
+  const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
+
+  // ✅ System alert function
   const showSystemAlert = (message, type = 'success') => {
     setAlertMessage(message);
     setAlertType(type);
@@ -141,27 +159,111 @@ const OrdersPage = () => {
     });
   };
 
-  // ✅ ADD REFRESH TOKEN FUNCTION
-  const refreshToken = async () => {
+  // ✅ UPDATED: Handle time filter selection
+  const handleTimeFilterSelect = (filter) => {
+    setDateFilter(filter);
+    setShowDateFilterDropdown(false);
+  };
+
+  // ✅ Check dispute status for an order
+  const checkDisputeStatus = async (orderId) => {
     try {
-      const response = await fetch('http://localhost:5000/api/auth/refresh-token', {
-        method: 'POST',
-        credentials: 'include' // Important for cookies
+      const token = getAuthToken();
+      if (!token) return false;
+
+      const response = await fetch(`${API_BASE_URL}/api/payment-links/${orderId}/dispute-status`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
       });
 
       if (response.ok) {
         const data = await response.json();
-        localStorage.setItem('token', data.token);
-        return data.token;
+        return data.hasDispute;
       }
-      return null;
+      return false;
     } catch (error) {
-      console.error('Token refresh failed:', error);
-      return null;
+      console.error('Error checking dispute status:', error);
+      return false;
     }
   };
 
-  // ✅ ADD HELPER FUNCTION FOR SUCCESSFUL DELIVERY
+  // ✅ Create dispute from order
+  const createDisputeFromOrder = async (orderId, reason = 'Order issue - needs review', description = '') => {
+    try {
+      setDisputeLoading(true);
+      const token = getAuthToken();
+      if (!token) {
+        showSystemAlert('You are not logged in', 'error');
+        return false;
+      }
+
+      console.log('🔄 Creating dispute for order:', orderId);
+
+      const response = await fetch(`${API_BASE_URL}/api/payment-links/${orderId}/dispute`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          reason: reason,
+          description: description || `Dispute created for order ${orderId}`
+        })
+      });
+
+      console.log('📡 Create dispute API response status:', response.status);
+
+      let responseData;
+      try {
+        responseData = await response.json();
+        console.log('📡 Create dispute API response data:', responseData);
+      } catch (parseError) {
+        console.error('❌ Error parsing response:', parseError);
+        showSystemAlert('Invalid response from server', 'error');
+        return false;
+      }
+
+      if (!response.ok) {
+        const errorMessage = responseData?.message || `Failed to create dispute (${response.status})`;
+        showSystemAlert(errorMessage, 'error');
+        return false;
+      }
+
+      if (!responseData.success) {
+        showSystemAlert(responseData.message || 'Failed to create dispute', 'error');
+        return false;
+      }
+
+      console.log('✅ Dispute created successfully:', responseData);
+      
+      // Update order status to disputed locally
+      setOrdersData(prev => prev.map(order => 
+        order.id === orderId 
+          ? { ...order, status: 'disputed', originalStatus: 'disputed' }
+          : order
+      ));
+
+      showSystemAlert('Dispute created successfully! Navigating to disputes page...', 'success');
+      
+      // Navigate to disputes page after a short delay
+      setTimeout(() => {
+        window.location.href = '/seller/disputes';
+      }, 2000);
+      
+      return true;
+
+    } catch (err) {
+      console.error('❌ Error creating dispute:', err);
+      showSystemAlert('Network error. Please try again later.', 'error');
+      return false;
+    } finally {
+      setDisputeLoading(false);
+    }
+  };
+
+  // ✅ Handle successful delivery
   const handleSuccessfulDelivery = (responseData, orderId, deliveryInfo) => {
     if (responseData.paymentLink) {
       setOrdersData(prev => prev.map(order => 
@@ -212,7 +314,7 @@ const OrdersPage = () => {
 
       console.log('🔄 Fetching orders for seller:', sellerId);
 
-      const response = await fetch(`http://localhost:5000/api/payment-links/seller/${sellerId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/payment-links/seller/${sellerId}`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -238,14 +340,14 @@ const OrdersPage = () => {
 
       // Transform the data from the API
       const transformedOrders = (data.paymentLinks || []).map(order => {
-        // ✅ FIXED: Map old statuses to new ones for frontend display
+        // Map old statuses to new ones for frontend display
         const statusMap = {
-          'active': 'waiting_payment', // Map active to waiting_payment
-          'waiting_payment': 'waiting_payment', // Keep waiting_payment as is
+          'active': 'waiting_payment',
+          'waiting_payment': 'waiting_payment',
           'paid': 'paid',
           'expired': 'expired',
           'cancelled': 'canceled',
-          'in_escrow': 'paid', // Map in_escrow to paid for frontend display
+          'in_escrow': 'paid',
           'delivered': 'delivered',
           'completed': 'completed',
           'disputed': 'disputed',
@@ -253,7 +355,6 @@ const OrdersPage = () => {
           'deleted': 'deleted'
         };
 
-        // ✅ FIXED: Determine the correct status for display
         const displayStatus = statusMap[order.status] || order.status || 'waiting_payment';
 
         return {
@@ -261,7 +362,7 @@ const OrdersPage = () => {
           productName: order.productName || 'Unknown Product',
           buyerName: order.buyerName || 'Unknown Buyer',
           productPrice: order.productPrice || 0,
-          status: displayStatus, // Use the mapped status
+          status: displayStatus,
           createdAt: order.createdAt || new Date().toISOString(),
           buyerPhone: order.buyerPhone || 'Not provided',
           buyerEmail: order.buyerEmail || '',
@@ -290,7 +391,7 @@ const OrdersPage = () => {
     }
   };
 
-  // ✅ FIXED: Calculate KPI stats from orders data - UPDATED with proper waiting payment calculation
+  // ✅ Calculate KPI stats from orders data
   const calculateKpiStats = (orders) => {
     const filteredOrders = filterOrdersByDate(orders, dateFilter, customDateRange);
     
@@ -301,11 +402,11 @@ const OrdersPage = () => {
       .filter(order => order.status === 'completed')
       .reduce((sum, order) => sum + (parseInt(order.productPrice) || 0), 0);
     
-    // ✅ FIXED: Waiting Payment - Include both waiting_payment status AND active status (which maps to waiting_payment)
+    // Waiting Payment - Include both waiting_payment status AND active status
     const waitingPayment = filteredOrders
       .filter(order => 
         order.status === 'waiting_payment' || 
-        order.originalStatus === 'active' // Include original active status
+        order.originalStatus === 'active'
       )
       .reduce((sum, order) => sum + (parseInt(order.productPrice) || 0), 0);
     
@@ -353,15 +454,15 @@ const OrdersPage = () => {
     ]);
   };
 
-  // Mock data fallback - UPDATED to reflect correct status mapping
+  // Mock data fallback
   const getMockOrders = () => [
     {
       id: 'ORD-7842',
       productName: 'iPhone 15 Pro',
       buyerName: 'John Mwita',
       productPrice: 2450000,
-      status: 'waiting_payment', // Display status
-      originalStatus: 'active', // Backend status
+      status: 'waiting_payment',
+      originalStatus: 'active',
       createdAt: '2024-01-15',
       buyerPhone: '+255 789 456 123',
       buyerEmail: 'john.mwita@email.com',
@@ -420,22 +521,10 @@ const OrdersPage = () => {
       buyerPhone: '+255 712 987 654',
       buyerEmail: 'david.w@email.com',
       shippingAddress: '654 Valley View, Mbeya'
-    },
-    {
-      id: 'ORD-7837',
-      productName: 'Smart Watch',
-      buyerName: 'Emma Thompson',
-      productPrice: 320000,
-      status: 'refunded',
-      originalStatus: 'refunded',
-      createdAt: '2024-01-10',
-      buyerPhone: '+255 789 555 123',
-      buyerEmail: 'emma.t@email.com',
-      shippingAddress: '987 Mountain Road, Arusha'
     }
   ];
 
-  // ✅ UPDATED: Improved delete order function with proper status validation
+  // ✅ Improved delete order function
   const deleteOrder = async (orderId) => {
     try {
       setDeleteLoading(true);
@@ -467,7 +556,7 @@ const OrdersPage = () => {
         return false;
       }
 
-      const response = await fetch(`http://localhost:5000/api/payment-links/${orderId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/payment-links/${orderId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -495,11 +584,7 @@ const OrdersPage = () => {
         if (response.status === 400) {
           showSystemAlert(responseData.details || 'Cannot delete this order. It may have already been processed or paid.', 'error');
         } else if (response.status === 401) {
-          if (responseData.code === 'TOKEN_EXPIRED') {
-            showSystemAlert('Session expired. Please log in again.', 'error');
-          } else {
-            showSystemAlert('Invalid token. Please log in again.', 'error');
-          }
+          showSystemAlert('Session expired. Please log in again.', 'error');
         } else if (response.status === 404) {
           showSystemAlert('Order not found. It may have already been deleted.', 'error');
         } else if (response.status === 403) {
@@ -522,12 +607,9 @@ const OrdersPage = () => {
 
       console.log('✅ Order deleted successfully');
       
-      // Update order status to deleted in local state
-      setOrdersData(prev => prev.map(order => 
-        order.id === orderId 
-          ? { ...order, status: 'deleted', originalStatus: 'deleted' }
-          : order
-      ));
+      // Remove order from table list and update KPI stats
+      setOrdersData(prev => prev.filter(order => order.id !== orderId));
+      calculateKpiStats(ordersData.filter(order => order.id !== orderId));
       
       return true;
 
@@ -540,7 +622,7 @@ const OrdersPage = () => {
     }
   };
 
-  // ✅ UPDATED: Mark order as delivered with proper token handling AND token refresh
+  // ✅ Mark order as delivered
   const markAsDelivered = async (orderId, deliveryInfo) => {
     try {
       setDeliveryLoading(true);
@@ -552,7 +634,7 @@ const OrdersPage = () => {
 
       console.log('🔄 Marking order as delivered:', orderId, deliveryInfo);
 
-      // ✅ CORRECTED: Send delivery data directly (not nested in deliveryInfo)
+      // Send delivery data directly
       const payload = {
         destination: deliveryInfo.destination,
         estimatedArrival: deliveryInfo.estimatedArrival,
@@ -563,19 +645,24 @@ const OrdersPage = () => {
 
       console.log('📦 Payload being sent:', payload);
 
-      // ✅ HANDLE FILE UPLOAD PROPERLY
+      // Handle file upload properly
       let requestBody;
       let headers = {
         'Authorization': `Bearer ${token}`,
       };
 
-      if (deliveryInfo.deliveryReceipt) {
+      if (deliveryInfo.deliveryReceipt && deliveryInfo.deliveryReceipt.length > 0) {
         // Use FormData for file upload
         const formData = new FormData();
         formData.append('data', JSON.stringify(payload));
-        formData.append('deliveryReceipt', deliveryInfo.deliveryReceipt);
+        
+        // Append multiple files
+        deliveryInfo.deliveryReceipt.forEach((file, index) => {
+          formData.append('deliveryReceipt', file);
+        });
+        
         requestBody = formData;
-        console.log('📤 Using FormData with file upload');
+        console.log('📤 Using FormData with', deliveryInfo.deliveryReceipt.length, 'file(s) upload');
       } else {
         // Use JSON without file
         headers['Content-Type'] = 'application/json';
@@ -583,33 +670,13 @@ const OrdersPage = () => {
         console.log('📤 Using JSON without file');
       }
 
-      const response = await fetch(`http://localhost:5000/api/payment-links/${orderId}/deliver`, {
+      const response = await fetch(`${API_BASE_URL}/api/payment-links/${orderId}/deliver`, {
         method: 'PUT',
         headers: headers,
         body: requestBody
       });
 
       console.log('📡 Deliver API response status:', response.status);
-
-      // ✅ ADD TOKEN REFRESH LOGIC HERE
-      if (response.status === 401) {
-        const refreshedToken = await refreshToken();
-        if (refreshedToken) {
-          // Retry the request with new token
-          headers['Authorization'] = `Bearer ${refreshedToken}`;
-          const retryResponse = await fetch(`http://localhost:5000/api/payment-links/${orderId}/deliver`, {
-            method: 'PUT',
-            headers: headers,
-            body: requestBody
-          });
-          
-          if (retryResponse.ok) {
-            // Process successful response from retry
-            const responseData = await retryResponse.json();
-            return handleSuccessfulDelivery(responseData, orderId, deliveryInfo);
-          }
-        }
-      }
 
       let responseData;
       try {
@@ -623,11 +690,7 @@ const OrdersPage = () => {
 
       if (!response.ok) {
         if (response.status === 401) {
-          if (responseData.code === 'TOKEN_EXPIRED') {
-            showSystemAlert('Session expired. Please log in again.', 'error');
-          } else {
-            showSystemAlert('Invalid token. Please log in again.', 'error');
-          }
+          showSystemAlert('Session expired. Please log in again.', 'error');
         } else {
           const errorMessage = responseData?.message || `Failed to update order (${response.status})`;
           showSystemAlert(errorMessage, 'error');
@@ -642,7 +705,7 @@ const OrdersPage = () => {
 
       console.log('✅ Order marked as delivered successfully:', responseData);
       
-      // ✅ UPDATE LOCAL STATE to match backend response
+      // Update local state to match backend response
       return handleSuccessfulDelivery(responseData, orderId, deliveryInfo);
 
     } catch (err) {
@@ -651,6 +714,38 @@ const OrdersPage = () => {
       return false;
     } finally {
       setDeliveryLoading(false);
+    }
+  };
+
+  // ✅ Handle dispute creation for delivered orders
+  const handleCreateDispute = async (orderId) => {
+    if (window.confirm('Are you sure you want to create a dispute for this order? This will move the order to disputed status and create a dispute case.')) {
+      const success = await createDisputeFromOrder(orderId);
+      if (success) {
+        handleCloseModal();
+      }
+    }
+  };
+
+  // ✅ Handle view dispute - check if dispute exists first
+  const handleViewDispute = async (orderId) => {
+    try {
+      const hasDispute = await checkDisputeStatus(orderId);
+      
+      if (hasDispute) {
+        // Dispute exists, navigate to disputes page
+        showSystemAlert('Navigating to dispute management...', 'success');
+        window.location.href = '/seller/disputes';
+      } else {
+        // No dispute exists, ask if they want to create one
+        if (window.confirm('No dispute found for this order. Would you like to create one?')) {
+          await createDisputeFromOrder(orderId);
+        }
+      }
+    } catch (error) {
+      console.error('Error checking dispute:', error);
+      // Fallback: navigate to disputes page
+      window.location.href = '/seller/disputes';
     }
   };
 
@@ -681,11 +776,11 @@ const OrdersPage = () => {
       case 'custom':
         return 'No orders found in the selected date range';
       default:
-        return 'No orders found matching your criteria';
+        return 'No orders found';
     }
   };
 
-  // ✅ FIXED: Function to check if order can be deleted
+  // ✅ Function to check if order can be deleted
   const canDeleteOrder = (order) => {
     // Only orders with waiting_payment status OR active original status can be deleted
     const canDeleteByStatus = 
@@ -694,6 +789,12 @@ const OrdersPage = () => {
       order.originalStatus === 'waiting_payment';
     
     return canDeleteByStatus;
+  };
+
+  // ✅ Function to open buyer payment page
+  const handleViewBuyerPage = (orderId) => {
+    const buyerPageUrl = `http://localhost:3000/buyer/pay/${orderId}`;
+    window.open(buyerPageUrl, '_blank');
   };
 
   const handleViewDetails = (order) => {
@@ -708,7 +809,7 @@ const OrdersPage = () => {
         destination: order.shippingAddress || '',
         estimatedArrival: '',
         deliveryCompany: '',
-        deliveryReceipt: null,
+        deliveryReceipt: [],
         trackingNumber: '',
         notes: ''
       });
@@ -726,7 +827,7 @@ const OrdersPage = () => {
       destination: '',
       estimatedArrival: '',
       deliveryCompany: '',
-      deliveryReceipt: null,
+      deliveryReceipt: [],
       trackingNumber: '',
       notes: ''
     });
@@ -745,19 +846,51 @@ const OrdersPage = () => {
     }));
   };
 
+  // ✅ Handle multiple file upload (1-5 files)
   const handleFileUpload = (event) => {
-    const file = event.target.files[0];
-    if (file) {
+    const files = Array.from(event.target.files);
+    
+    // Validate file count
+    if (files.length > 5) {
+      showSystemAlert('Maximum 5 files allowed', 'error');
+      return;
+    }
+
+    // Validate file types and sizes
+    const validFiles = files.filter(file => {
+      const isValidType = ['image/png', 'image/jpeg', 'application/pdf'].includes(file.type);
+      const isValidSize = file.size <= 10 * 1024 * 1024; // 10MB
+      
+      if (!isValidType) {
+        showSystemAlert(`File ${file.name} must be PNG, JPG, or PDF`, 'error');
+        return false;
+      }
+      if (!isValidSize) {
+        showSystemAlert(`File ${file.name} must be less than 10MB`, 'error');
+        return false;
+      }
+      return true;
+    });
+
+    if (validFiles.length > 0) {
       setDeliveryData(prev => ({
         ...prev,
-        deliveryReceipt: file
+        deliveryReceipt: [...prev.deliveryReceipt, ...validFiles].slice(0, 5) // Max 5 files
       }));
     }
   };
 
-  // ✅ IMPROVED: Handle mark as delivered with validation
+  // ✅ Remove individual file from delivery receipts
+  const removeFile = (index) => {
+    setDeliveryData(prev => ({
+      ...prev,
+      deliveryReceipt: prev.deliveryReceipt.filter((_, i) => i !== index)
+    }));
+  };
+
+  // ✅ Handle mark as delivered with validation
   const handleMarkDelivered = async () => {
-    // ✅ IMPROVED VALIDATION
+    // Validation
     if (!deliveryData.destination?.trim()) {
       showSystemAlert('Please enter the destination address', 'error');
       return;
@@ -773,13 +906,19 @@ const OrdersPage = () => {
       return;
     }
 
+    // Validate at least one file is uploaded
+    if (deliveryData.deliveryReceipt.length === 0) {
+      showSystemAlert('Please upload at least one delivery receipt', 'error');
+      return;
+    }
+
     const success = await markAsDelivered(selectedOrder.id, deliveryData);
     
     if (success) {
       showSystemAlert('Order marked as delivered! Buyer will now see the delivery information.');
       handleCloseModal();
       
-      // ✅ REFRESH DATA to ensure consistency
+      // Refresh data to ensure consistency
       setTimeout(() => {
         fetchOrders();
       }, 500);
@@ -819,9 +958,6 @@ const OrdersPage = () => {
         setShowOrderModal(false);
         handleCloseDeleteConfirm();
         showSystemAlert('Order deleted successfully!');
-        
-        // Refresh KPI stats
-        calculateKpiStats(ordersData);
       }
     }
   };
@@ -862,7 +998,7 @@ const OrdersPage = () => {
       <div className="min-h-screen bg-gray-50 p-4 sm:p-6 lg:p-8">
         <div className="max-w-7xl mx-auto">
           
-          {/* ✅ NEW: System Alert */}
+          {/* System Alert */}
           {showAlert && (
             <div className={`fixed top-4 right-4 z-50 max-w-sm w-full ${
               alertType === 'success' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
@@ -936,7 +1072,7 @@ const OrdersPage = () => {
             ))}
           </div>
 
-          {/* Control Bar - Search and Filters */}
+          {/* ✅ UPDATED: Control Bar - Search and Filters with Dropdown */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
             <div className="flex flex-col sm:flex-row gap-4">
               {/* Search Bar */}
@@ -955,24 +1091,33 @@ const OrdersPage = () => {
                 </div>
               </div>
 
-              {/* Filter Options */}
-              <div className="flex flex-wrap gap-2">
-                {['today', 'week', 'month', 'custom'].map((filter) => (
-                  <button
-                    key={filter}
-                    onClick={() => setDateFilter(filter)}
-                    className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      dateFilter === filter
-                        ? 'bg-primary-500 text-white'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
-                  >
-                    {filter === 'today' && 'Today'}
-                    {filter === 'week' && 'This Week'}
-                    {filter === 'month' && 'This Month'}
-                    {filter === 'custom' && 'Custom Range'}
-                  </button>
-                ))}
+              {/* ✅ UPDATED: Time Filter Dropdown */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowDateFilterDropdown(!showDateFilterDropdown)}
+                  className="flex items-center space-x-2 bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors min-w-[140px] justify-between"
+                >
+                  <span>{timeFilterOptions.find(opt => opt.value === dateFilter)?.label || 'All Time'}</span>
+                  <ChevronDown className={`h-4 w-4 transition-transform ${showDateFilterDropdown ? 'rotate-180' : ''}`} />
+                </button>
+
+                {showDateFilterDropdown && (
+                  <div className="absolute top-full left-0 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg z-10">
+                    {timeFilterOptions.map((filter) => (
+                      <button
+                        key={filter.value}
+                        onClick={() => handleTimeFilterSelect(filter.value)}
+                        className={`w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors ${
+                          dateFilter === filter.value
+                            ? 'bg-primary-50 text-primary-600'
+                            : 'text-gray-700'
+                        } first:rounded-t-lg last:rounded-b-lg`}
+                      >
+                        {filter.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -1020,7 +1165,7 @@ const OrdersPage = () => {
               <table className="w-full">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Order & Date</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Order ID</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Product</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Buyer</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Price</th>
@@ -1033,7 +1178,14 @@ const OrdersPage = () => {
                     <tr key={order.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-medium text-gray-900">
-                          {order.id}
+                          <button
+                            onClick={() => handleViewBuyerPage(order.id)}
+                            className="text-primary-600 hover:text-primary-800 flex items-center space-x-1 transition-colors"
+                            title="View buyer payment page"
+                          >
+                            <span>{order.id}</span>
+                            <ExternalLink className="h-3 w-3" />
+                          </button>
                         </div>
                         <div className="text-sm text-gray-500">
                           {formatDateTime(order.createdAt)}
@@ -1077,7 +1229,14 @@ const OrdersPage = () => {
                 <div key={order.id} className="p-4 hover:bg-gray-50">
                   <div className="flex justify-between items-start mb-3">
                     <div>
-                      <div className="font-medium text-gray-900">{order.id}</div>
+                      <button
+                        onClick={() => handleViewBuyerPage(order.id)}
+                        className="font-medium text-gray-900 flex items-center space-x-1"
+                        title="View buyer payment page"
+                      >
+                        <span>{order.id}</span>
+                        <ExternalLink className="h-3 w-3" />
+                      </button>
                       <div className="text-sm text-gray-500">{formatDateTime(order.createdAt)}</div>
                       <div className="text-sm text-gray-500 mt-1">{order.productName}</div>
                     </div>
@@ -1220,6 +1379,35 @@ const OrdersPage = () => {
                 <span>Order Date:</span>
                 <span>{formatDateTime(selectedOrder.createdAt)}</span>
               </div>
+
+              {/* Dispute Section for Disputed Orders */}
+              {selectedOrder.status === 'disputed' && (
+                <div className="border-t pt-4">
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+                    <div className="flex items-center space-x-2 text-red-700 mb-2">
+                      <AlertCircle className="h-5 w-5" />
+                      <span className="font-semibold">Order in Dispute</span>
+                    </div>
+                    <p className="text-sm text-red-600">
+                      This order has an active dispute. Please resolve the dispute before proceeding.
+                    </p>
+                  </div>
+                  
+                  <button
+                    onClick={() => handleViewDispute(selectedOrder.id)}
+                    className="w-full flex items-center justify-center space-x-2 bg-red-500 text-white px-4 py-3 rounded-lg font-medium hover:bg-red-600 transition-colors text-sm sm:text-base"
+                  >
+                    <FileText className="h-4 w-4" />
+                    <span>Manage Dispute</span>
+                  </button>
+                  <p className="text-xs text-gray-500 text-center mt-2">
+                    View and respond to the dispute details
+                  </p>
+                </div>
+              )}
+
+              {/* ✅ REMOVED: Create Dispute Button for Delivered/Completed Orders */}
+              {/* Seller cannot create disputes - disputes come from buyer side via [linkId].jsx */}
 
               {/* Delete Button for Waiting Payment Orders */}
               {canDeleteOrder(selectedOrder) && (
@@ -1373,10 +1561,10 @@ const OrdersPage = () => {
                     <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 sm:p-6 text-center hover:border-primary-300 transition-colors">
                       <Upload className="h-6 w-6 sm:h-8 sm:w-8 text-gray-400 mx-auto mb-2" />
                       <p className="text-xs sm:text-sm text-gray-600 mb-2">
-                        Upload delivery receipt or proof of delivery
+                        Upload delivery receipt or proof of delivery (1-5 files)
                       </p>
                       <p className="text-xs text-gray-500 mb-4">
-                        PNG, JPG, PDF up to 10MB
+                        PNG, JPG, PDF up to 10MB each
                       </p>
                       <input
                         type="file"
@@ -1384,17 +1572,35 @@ const OrdersPage = () => {
                         onChange={handleFileUpload}
                         className="hidden"
                         id="receipt-upload"
+                        multiple
                       />
                       <label
                         htmlFor="receipt-upload"
                         className="inline-block bg-primary-500 text-white px-3 py-2 sm:px-4 sm:py-2 rounded-lg text-xs sm:text-sm font-medium hover:bg-primary-600 transition-colors cursor-pointer"
                       >
-                        Choose File
+                        Choose Files
                       </label>
-                      {deliveryData.deliveryReceipt && (
-                        <p className="text-xs sm:text-sm text-green-600 mt-2">
-                          ✓ {deliveryData.deliveryReceipt.name}
-                        </p>
+                      
+                      {/* Show multiple uploaded files */}
+                      {deliveryData.deliveryReceipt.length > 0 && (
+                        <div className="mt-4 space-y-2">
+                          <p className="text-xs text-gray-600 text-center">
+                            {deliveryData.deliveryReceipt.length} file(s) selected:
+                          </p>
+                          {deliveryData.deliveryReceipt.map((file, index) => (
+                            <div key={index} className="flex items-center justify-between bg-green-50 border border-green-200 rounded px-3 py-2">
+                              <span className="text-xs text-green-700 truncate flex-1">
+                                {file.name}
+                              </span>
+                              <button
+                                onClick={() => removeFile(index)}
+                                className="text-red-500 hover:text-red-700 ml-2"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
                       )}
                     </div>
                   </div>

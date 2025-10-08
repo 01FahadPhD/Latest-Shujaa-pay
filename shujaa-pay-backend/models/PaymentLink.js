@@ -184,6 +184,7 @@ const paymentLinkSchema = new mongoose.Schema({
 
 // ✅ ADD INDEXES FOR BETTER PERFORMANCE
 paymentLinkSchema.index({ sellerId: 1, createdAt: -1 });
+paymentLinkSchema.index({ linkId: 1 });
 paymentLinkSchema.index({ status: 1 });
 paymentLinkSchema.index({ expiresAt: 1 });
 paymentLinkSchema.index({ buyerPhone: 1 });

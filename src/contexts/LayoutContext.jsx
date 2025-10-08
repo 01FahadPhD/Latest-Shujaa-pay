@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState } from 'react';
 
 const LayoutContext = createContext();
 
@@ -13,25 +13,12 @@ export const useLayout = () => {
 export const LayoutProvider = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const toggleSidebar = useCallback(() => {
+  const toggleSidebar = () => {
     setSidebarOpen(prev => !prev);
-  }, []);
-
-  const openSidebar = useCallback(() => {
-    setSidebarOpen(true);
-  }, []);
-
-  const closeSidebar = useCallback(() => {
-    setSidebarOpen(false);
-  }, []);
+  };
 
   return (
-    <LayoutContext.Provider value={{
-      sidebarOpen,
-      toggleSidebar,
-      openSidebar,
-      closeSidebar
-    }}>
+    <LayoutContext.Provider value={{ sidebarOpen, toggleSidebar }}>
       {children}
     </LayoutContext.Provider>
   );

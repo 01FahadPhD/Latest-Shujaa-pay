@@ -78,6 +78,104 @@ const SignupPage = () => {
     if (error) setError('');
   };
 
+  // Handle phone number input with validation
+  const handlePhoneNumberChange = (e) => {
+    let value = e.target.value.replace(/\D/g, ''); // Remove non-digits
+    
+    // Remove leading 0 if present
+    if (value.startsWith('0')) {
+      value = value.substring(1);
+    }
+    
+    // Limit to 9 digits
+    if (value.length > 9) {
+      value = value.substring(0, 9);
+    }
+    
+    setFormData({
+      ...formData,
+      phoneNumber: value
+    });
+    
+    // Clear error when user starts typing
+    if (error) setError('');
+  };
+
+  // Format phone number for display
+  const formatPhoneNumber = (phoneNumber) => {
+    if (!phoneNumber) return '';
+    
+    // Format as XXX XXX XXX
+    return phoneNumber.replace(/(\d{3})(\d{3})(\d{3})/, '$1 $2 $3');
+  };
+
+  // Validate phone number
+  const validatePhoneNumber = (phoneNumber) => {
+    if (!phoneNumber) {
+      return 'Phone number is required';
+    }
+    
+    if (phoneNumber.length !== 9) {
+      return 'Phone number must be 9 digits (excluding leading 0)';
+    }
+    
+    if (phoneNumber.startsWith('0')) {
+      return 'Phone number should not start with 0';
+    }
+    
+    // Check if it's a valid Tanzanian mobile number pattern
+    const validPrefixes = ['74', '75', '76', '77', '78', '79', '62', '65', '66', '67'];
+    const prefix = phoneNumber.substring(0, 2);
+    
+    if (!validPrefixes.includes(prefix)) {
+      return 'Please enter a valid Tanzanian mobile number';
+    }
+    
+    return null;
+  };
+
+  // Validate password strength
+  const validatePassword = (password) => {
+    if (!password) {
+      return 'Password is required';
+    }
+    
+    if (password.length < 8) {
+      return 'Password must be at least 8 characters long';
+    }
+    
+    if (!/(?=.*[a-z])/.test(password)) {
+      return 'Password must contain at least one lowercase letter';
+    }
+    
+    if (!/(?=.*[A-Z])/.test(password)) {
+      return 'Password must contain at least one uppercase letter';
+    }
+    
+    if (!/(?=.*\d)/.test(password)) {
+      return 'Password must contain at least one number';
+    }
+    
+    if (!/(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?])/.test(password)) {
+      return 'Password must contain at least one special character';
+    }
+    
+    return null;
+  };
+
+  // Check password strength and return requirements
+  const getPasswordRequirements = (password) => {
+    const requirements = {
+      length: password.length >= 8,
+      lowercase: /(?=.*[a-z])/.test(password),
+      uppercase: /(?=.*[A-Z])/.test(password),
+      number: /(?=.*\d)/.test(password),
+      special: /(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?])/.test(password)
+    };
+    
+    return requirements;
+  };
+
   const handleStep1Submit = (e) => {
     e.preventDefault();
     // Basic validation for required fields
@@ -92,8 +190,23 @@ const SignupPage = () => {
     e.preventDefault();
     setError('');
 
+    // Validate all required fields
     if (!formData.email || !formData.password || !formData.confirmPassword || !formData.phoneNumber) {
       setError('Please fill all required fields');
+      return;
+    }
+
+    // Validate phone number
+    const phoneError = validatePhoneNumber(formData.phoneNumber);
+    if (phoneError) {
+      setError(phoneError);
+      return;
+    }
+
+    // Validate password strength
+    const passwordError = validatePassword(formData.password);
+    if (passwordError) {
+      setError(passwordError);
       return;
     }
 
@@ -102,15 +215,12 @@ const SignupPage = () => {
       return;
     }
 
-    // Password strength validation
-    if (formData.password.length < 6) {
-      setError('Password must be at least 6 characters long');
-      return;
-    }
-
     setIsLoading(true);
 
     try {
+      // Format phone number with country code for backend
+      const formattedPhoneNumber = `+255${formData.phoneNumber}`;
+
       const response = await fetch('http://localhost:5000/api/auth/register', {
         method: 'POST',
         headers: { 
@@ -121,7 +231,7 @@ const SignupPage = () => {
           businessName: formData.businessName,
           businessType: formData.businessType,
           location: formData.location,
-          phoneNumber: formData.phoneNumber,
+          phoneNumber: formattedPhoneNumber,
           email: formData.email,
           password: formData.password
         }),
@@ -156,6 +266,9 @@ const SignupPage = () => {
     setCurrentStep(1);
     setError('');
   };
+
+  // Get password requirements for display
+  const passwordRequirements = getPasswordRequirements(formData.password);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-100 flex items-center justify-center p-4">
@@ -325,21 +438,28 @@ const SignupPage = () => {
                   <label htmlFor="phoneNumber" className="block text-sm font-medium text-gray-700 mb-2">
                     Phone Number *
                   </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <Phone className="h-5 w-5 text-gray-400" />
+                  <div className="flex">
+                    {/* Country Code - More prominent without icon */}
+                    <div className="flex items-center px-3 border border-r-0 border-gray-300 rounded-l-lg bg-gray-100 text-gray-800 min-h-[44px]">
+                      <span className="text-sm font-semibold">+255</span>
                     </div>
+                    {/* Phone Input */}
                     <input
                       id="phoneNumber"
                       name="phoneNumber"
                       type="tel"
                       required
-                      value={formData.phoneNumber}
-                      onChange={handleChange}
-                      className="block w-full pl-10 pr-3 py-3 text-base border border-gray-300 rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-200 min-h-[44px]"
-                      placeholder="Enter your phone number"
+                      value={formatPhoneNumber(formData.phoneNumber)}
+                      onChange={handlePhoneNumberChange}
+                      className="block w-full pl-3 pr-3 py-3 text-base border border-gray-300 rounded-r-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-200 min-h-[44px]"
+                      placeholder="XXX XXX XXX"
+                      maxLength={11} // 9 digits + 2 spaces
+                      pattern="[0-9\s]{9,11}"
                     />
                   </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Enter 9 digits without leading 0 (e.g., 74 123 4567)
+                  </p>
                 </div>
 
                 {/* Email */}
@@ -381,7 +501,7 @@ const SignupPage = () => {
                       value={formData.password}
                       onChange={handleChange}
                       className="block w-full pl-10 pr-10 py-3 text-base border border-gray-300 rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-200 min-h-[44px]"
-                      placeholder="Create a password (min. 6 characters)"
+                      placeholder="Create a strong password"
                     />
                     <button
                       type="button"
@@ -395,6 +515,45 @@ const SignupPage = () => {
                       )}
                     </button>
                   </div>
+                  
+                  {/* Password Requirements */}
+                  {formData.password && (
+                    <div className="mt-2 p-3 bg-gray-50 rounded-lg">
+                      <p className="text-xs font-medium text-gray-700 mb-2">Password must contain:</p>
+                      <div className="space-y-1">
+                        <div className="flex items-center">
+                          <div className={`w-2 h-2 rounded-full mr-2 ${passwordRequirements.length ? 'bg-green-500' : 'bg-gray-300'}`}></div>
+                          <span className={`text-xs ${passwordRequirements.length ? 'text-green-600' : 'text-gray-500'}`}>
+                            At least 8 characters
+                          </span>
+                        </div>
+                        <div className="flex items-center">
+                          <div className={`w-2 h-2 rounded-full mr-2 ${passwordRequirements.lowercase ? 'bg-green-500' : 'bg-gray-300'}`}></div>
+                          <span className={`text-xs ${passwordRequirements.lowercase ? 'text-green-600' : 'text-gray-500'}`}>
+                            One lowercase letter (a-z)
+                          </span>
+                        </div>
+                        <div className="flex items-center">
+                          <div className={`w-2 h-2 rounded-full mr-2 ${passwordRequirements.uppercase ? 'bg-green-500' : 'bg-gray-300'}`}></div>
+                          <span className={`text-xs ${passwordRequirements.uppercase ? 'text-green-600' : 'text-gray-500'}`}>
+                            One uppercase letter (A-Z)
+                          </span>
+                        </div>
+                        <div className="flex items-center">
+                          <div className={`w-2 h-2 rounded-full mr-2 ${passwordRequirements.number ? 'bg-green-500' : 'bg-gray-300'}`}></div>
+                          <span className={`text-xs ${passwordRequirements.number ? 'text-green-600' : 'text-gray-500'}`}>
+                            One number (0-9)
+                          </span>
+                        </div>
+                        <div className="flex items-center">
+                          <div className={`w-2 h-2 rounded-full mr-2 ${passwordRequirements.special ? 'bg-green-500' : 'bg-gray-300'}`}></div>
+                          <span className={`text-xs ${passwordRequirements.special ? 'text-green-600' : 'text-gray-500'}`}>
+                            One special character (!@#$% etc.)
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Confirm Password */}

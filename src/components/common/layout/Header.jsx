@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Menu, Bell, User, Shield } from 'lucide-react';
 import { useRouter } from 'next/router';
 
 const Header = ({ onMenuClick, role = 'seller' }) => {
   const router = useRouter();
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
 
   // Get page title based on current route and role
   const getPageTitle = () => {
@@ -19,6 +20,7 @@ const Header = ({ onMenuClick, role = 'seller' }) => {
       if (path.includes('analytics')) return 'Reports & Analytics';
       if (path.includes('settings')) return 'Admin Settings';
       if (path.includes('profile')) return 'My Profile';
+      if (path.includes('notifications')) return 'Notifications';
       return 'Admin Panel';
     }
     
@@ -30,6 +32,7 @@ const Header = ({ onMenuClick, role = 'seller' }) => {
     if (path.includes('disputes')) return 'Disputes';
     if (path.includes('support')) return 'Support';
     if (path.includes('profile')) return 'My Profile';
+    if (path.includes('notifications')) return 'Notifications';
     return 'Shujaa Pay';
   };
 
@@ -87,8 +90,25 @@ const Header = ({ onMenuClick, role = 'seller' }) => {
     };
   };
 
+  // Mock function to get unread notifications count
+  const getUnreadNotificationsCount = () => {
+    // In a real app, this would come from an API or context
+    // For now, we'll use a mock count
+    return 3; // Mock unread notifications count
+  };
+
+  useEffect(() => {
+    // Simulate fetching unread notifications count
+    const count = getUnreadNotificationsCount();
+    setUnreadNotifications(count);
+  }, []);
+
   const handleProfileClick = () => {
     router.push('/seller/profile');
+  };
+
+  const handleNotificationsClick = () => {
+    router.push('/seller/notifications');
   };
 
   const userInfo = getUserInfo();
@@ -134,9 +154,14 @@ const Header = ({ onMenuClick, role = 'seller' }) => {
         {/* Right section - User menu and notifications */}
         <div className="flex items-center space-x-3 sm:space-x-4">
           {/* Notifications */}
-          <button className="p-2 rounded-full text-gray-600 hover:text-gray-900 hover:bg-gray-100 relative transition-colors">
+          <button 
+            onClick={handleNotificationsClick}
+            className="p-2 rounded-full text-gray-600 hover:text-gray-900 hover:bg-gray-100 relative transition-colors"
+          >
             <Bell className="h-5 w-5" />
-            <span className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full"></span>
+            {unreadNotifications > 0 && (
+              <span className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full"></span>
+            )}
           </button>
           
           {/* User profile */}

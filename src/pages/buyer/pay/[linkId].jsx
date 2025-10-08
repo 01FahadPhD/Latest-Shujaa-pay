@@ -63,7 +63,12 @@ const BuyerPaymentPage = () => {
   const [showNotification, setShowNotification] = useState(false);
   const [notificationMessage, setNotificationMessage] = useState('');
   const [notificationType, setNotificationType] = useState('success'); // 'success' or 'error'
-  const [showContactSupport, setShowContactSupport] = useState(false); // ✅ NEW: For contact support popup
+  const [showContactSupport, setShowContactSupport] = useState(false);
+
+  // ✅ ADDED: New states for automatic release tracking
+  const [paymentReleased, setPaymentReleased] = useState(false);
+  const [autoReleaseTime, setAutoReleaseTime] = useState(null);
+  const [timeUntilAutoRelease, setTimeUntilAutoRelease] = useState(null);
 
   const lastFetchRef = useRef(null);
 
@@ -95,6 +100,55 @@ const BuyerPaymentPage = () => {
       supportedBanks: ['CRDB', 'NMB', 'Stanbic', 'Standard Chartered']
     }
   ];
+
+  // ✅ ADDED: Function to check and handle automatic payment release
+  const checkAutomaticPaymentRelease = async () => {
+    try {
+      // Check if order is delivered and auto-release time has passed
+      if (currentStep === 'delivered' && autoReleaseTime && new Date() >= autoReleaseTime) {
+        console.log('🕒 Auto-releasing payment to seller');
+        
+        const response = await fetch(`http://localhost:5000/api/payment-links/${linkId}/release-payment`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            releasedAt: new Date().toISOString(),
+            releasedAutomatically: true
+          })
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success) {
+            setPaymentReleased(true);
+            setCurrentStep('completed');
+            setProductData(prev => ({
+              ...prev,
+              status: 'completed',
+              paymentReleased: true,
+              paymentReleasedAt: new Date().toISOString(),
+              releasedAutomatically: true
+            }));
+            
+            showNotificationMessage('Payment has been automatically released to the seller.', 'success');
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error in automatic payment release:', error);
+    }
+  };
+
+  // ✅ ADDED: Calculate auto-release time based on ETA
+  const calculateAutoReleaseTime = (deliveryInfo) => {
+    if (!deliveryInfo || !deliveryInfo.estimatedArrival) return null;
+    
+    const eta = new Date(deliveryInfo.estimatedArrival);
+    const autoRelease = new Date(eta.getTime() + 24 * 60 * 60 * 1000); // ETA + 24 hours
+    return autoRelease;
+  };
 
   // ✅ UPDATED: Show notification function
   const showNotificationMessage = (message, type = 'success') => {
@@ -149,7 +203,7 @@ const BuyerPaymentPage = () => {
     setOtpLoading(false);
   };
 
-  // ✅ UPDATED: Final confirm receipt after OTP
+  // ✅ UPDATED: Final confirm receipt after OTP - with immediate payment release
   const confirmReceiptFinal = async () => {
     try {
       const response = await fetch(`http://localhost:5000/api/payment-links/${linkId}/complete`, {
@@ -159,7 +213,10 @@ const BuyerPaymentPage = () => {
         },
         body: JSON.stringify({
           status: 'completed',
-          completedAt: new Date().toISOString()
+          completedAt: new Date().toISOString(),
+          paymentReleased: true,
+          paymentReleasedAt: new Date().toISOString(),
+          releasedAutomatically: false
         })
       });
 
@@ -167,9 +224,13 @@ const BuyerPaymentPage = () => {
         const data = await response.json();
         if (data.success) {
           setCurrentStep('completed');
+          setPaymentReleased(true);
           setProductData(prev => ({
             ...prev,
-            status: 'completed'
+            status: 'completed',
+            paymentReleased: true,
+            paymentReleasedAt: new Date().toISOString(),
+            releasedAutomatically: false
           }));
           setShowOTPModal(false);
           showNotificationMessage('Thank you for confirming receipt! Payment has been released to the seller.', 'success');
@@ -229,6 +290,12 @@ const BuyerPaymentPage = () => {
 
   // ✅ UPDATED: Confirm receipt function with OTP
   const confirmReceipt = async () => {
+    // ✅ ADDED: Check if payment is already released
+    if (paymentReleased || productData.paymentReleased) {
+      showNotificationMessage('Payment has already been released to the seller.', 'info');
+      return;
+    }
+
     setOtpAction('confirm_receipt');
     setOtp('');
     const otpSent = await sendOTP('confirm_receipt');
@@ -239,6 +306,12 @@ const BuyerPaymentPage = () => {
 
   // ✅ UPDATED: Report dispute function with form
   const reportDispute = () => {
+    // ✅ ADDED: Check if payment is already released
+    if (paymentReleased || productData.paymentReleased) {
+      showNotificationMessage('Cannot report dispute after payment has been released.', 'info');
+      return;
+    }
+
     setShowDisputeModal(true);
     setDisputeData({
       reason: '',
@@ -246,32 +319,6 @@ const BuyerPaymentPage = () => {
       evidence: [], // ✅ CHANGED: Initialize as empty array
       otherReason: ''
     });
-  };
-
-  // ✅ UPDATED: Handle dispute form submission
-  const handleDisputeSubmit = async () => {
-    if (!disputeData.reason) {
-      showNotificationMessage('Please select a reason for dispute', 'error');
-      return;
-    }
-
-    if (!disputeData.description.trim()) {
-      showNotificationMessage('Please provide a description of the issue', 'error');
-      return;
-    }
-
-    if (disputeData.reason === 'Others' && !disputeData.otherReason.trim()) {
-      showNotificationMessage('Please specify the reason for dispute', 'error');
-      return;
-    }
-
-    setOtpAction('submit_dispute');
-    setOtp('');
-    const otpSent = await sendOTP('submit_dispute');
-    if (otpSent) {
-      setShowOTPModal(true);
-      setShowDisputeModal(false); // ✅ ADDED: Close dispute modal when OTP appears
-    }
   };
 
   // ✅ NEW: Handle multiple image upload for dispute evidence
@@ -504,6 +551,51 @@ const BuyerPaymentPage = () => {
     });
   };
 
+  // ✅ ADDED: Update auto-release countdown
+  useEffect(() => {
+    if (autoReleaseTime && currentStep === 'delivered' && !paymentReleased) {
+      const interval = setInterval(() => {
+        const now = new Date();
+        const timeRemaining = autoReleaseTime - now;
+        
+        if (timeRemaining <= 0) {
+          setTimeUntilAutoRelease('Releasing payment...');
+          checkAutomaticPaymentRelease();
+        } else {
+          const hours = Math.floor(timeRemaining / (1000 * 60 * 60));
+          const minutes = Math.floor((timeRemaining % (1000 * 60 * 60)) / (1000 * 60));
+          setTimeUntilAutoRelease(`${hours}h ${minutes}m`);
+        }
+      }, 60000); // Update every minute
+      
+      return () => clearInterval(interval);
+    }
+  }, [autoReleaseTime, currentStep, paymentReleased]);
+
+  // ✅ UPDATED: Enhanced useEffect to set up auto-release timing
+  useEffect(() => {
+    if (productData?.deliveryInfo && productData.status === 'delivered') {
+      const autoReleaseTime = calculateAutoReleaseTime(productData.deliveryInfo);
+      setAutoReleaseTime(autoReleaseTime);
+      
+      // Set initial countdown
+      if (autoReleaseTime) {
+        const now = new Date();
+        const timeRemaining = autoReleaseTime - now;
+        
+        if (timeRemaining > 0) {
+          const hours = Math.floor(timeRemaining / (1000 * 60 * 60));
+          const minutes = Math.floor((timeRemaining % (1000 * 60 * 60)) / (1000 * 60));
+          setTimeUntilAutoRelease(`${hours}h ${minutes}m`);
+        } else {
+          setTimeUntilAutoRelease('Releasing payment...');
+          // Trigger immediate release if time has already passed
+          checkAutomaticPaymentRelease();
+        }
+      }
+    }
+  }, [productData?.deliveryInfo, productData?.status]);
+
   // Fetch payment link data with complete seller information
   useEffect(() => {
     if (!linkId) return;
@@ -566,6 +658,11 @@ const BuyerPaymentPage = () => {
         setCurrentStep(step);
         console.log('📊 Setting current step to:', step, 'based on status:', paymentLink.status);
         
+        // ✅ ADDED: Check if payment is already released
+        if (paymentLink.paymentReleased) {
+          setPaymentReleased(true);
+        }
+        
         // Fetch complete seller profile for location and business type
         let completeSellerData = null;
         if (paymentLink.seller?.id) {
@@ -608,7 +705,8 @@ const BuyerPaymentPage = () => {
           status: processedData.status,
           step: step,
           hasDeliveryInfo: hasDeliveryInfo(processedData.deliveryInfo),
-          hasReceipt: hasReceipt(processedData.deliveryInfo)
+          hasReceipt: hasReceipt(processedData.deliveryInfo),
+          paymentReleased: processedData.paymentReleased
         });
         
       } catch (err) {
@@ -929,7 +1027,7 @@ const BuyerPaymentPage = () => {
     );
   };
 
-  // ✅ UPDATED: Delivery Information Component
+  // ✅ UPDATED: Delivery Information Component with auto-release countdown
   const DeliveryInfoSection = () => {
     if (!productData?.deliveryInfo || !hasDeliveryInfo(productData.deliveryInfo)) {
       return null;
@@ -937,6 +1035,9 @@ const BuyerPaymentPage = () => {
 
     const { deliveryInfo } = productData;
     const receiptUrl = getReceiptUrl(deliveryInfo);
+
+    // ✅ ADDED: Check if payment is already released
+    const isPaymentReleased = productData.paymentReleased || paymentReleased;
 
     return (
       <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 sm:p-6">
@@ -982,6 +1083,43 @@ const BuyerPaymentPage = () => {
               <div>
                 <p className="text-sm font-medium text-blue-800">Tracking Number</p>
                 <p className="text-blue-900 font-mono">{deliveryInfo.trackingNumber}</p>
+              </div>
+            </div>
+          )}
+
+          {/* ✅ ADDED: Auto-release countdown */}
+          {currentStep === 'delivered' && !isPaymentReleased && timeUntilAutoRelease && (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+              <div className="flex items-center space-x-2">
+                <Clock className="h-4 w-4 text-yellow-600" />
+                <div>
+                  <p className="text-sm font-medium text-yellow-800">Automatic Payment Release</p>
+                  <p className="text-xs text-yellow-700">
+                    Payment will be automatically released to seller in: <strong>{timeUntilAutoRelease}</strong>
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ✅ ADDED: Payment released message */}
+          {isPaymentReleased && (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+              <div className="flex items-center space-x-2">
+                <CheckCircle className="h-4 w-4 text-green-600" />
+                <div>
+                  <p className="text-sm font-medium text-green-800">Payment Released</p>
+                  <p className="text-xs text-green-700">
+                    {productData.releasedAutomatically 
+                      ? 'Payment was automatically released to the seller.' 
+                      : 'Payment has been released to the seller.'}
+                  </p>
+                  {productData.paymentReleasedAt && (
+                    <p className="text-xs text-green-600 mt-1">
+                      Released on: {new Date(productData.paymentReleasedAt).toLocaleString()}
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
           )}
@@ -1035,21 +1173,34 @@ const BuyerPaymentPage = () => {
             <div className="flex flex-col sm:flex-row gap-2">
               <button
                 onClick={confirmReceipt}
-                disabled={loading}
+                disabled={loading || isPaymentReleased}
                 className="flex items-center justify-center space-x-2 bg-green-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-1"
               >
                 <ThumbsUp className="h-4 w-4" />
-                <span>{loading ? 'Confirming...' : 'Confirm Receipt'}</span>
+                <span>
+                  {isPaymentReleased ? 'Payment Released' : 
+                   loading ? 'Confirming...' : 'Confirm Receipt'}
+                </span>
               </button>
               
               <button
                 onClick={reportDispute}
-                className="flex items-center justify-center space-x-2 bg-red-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-red-700 transition-colors flex-1"
+                disabled={isPaymentReleased}
+                className="flex items-center justify-center space-x-2 bg-red-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-1"
               >
                 <Flag className="h-4 w-4" />
                 <span>Report Dispute</span>
               </button>
             </div>
+
+            {/* ✅ ADDED: Message when payment is already released */}
+            {isPaymentReleased && (
+              <div className="mt-3 p-2 bg-blue-50 border border-blue-200 rounded">
+                <p className="text-xs text-blue-700 text-center">
+                  Payment has already been released to the seller.
+                </p>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -1113,6 +1264,8 @@ const BuyerPaymentPage = () => {
 
   // ✅ UPDATED: After payment success or delivery, show appropriate status
   if (currentStep === 'payment_success' || currentStep === 'delivered' || currentStep === 'completed' || currentStep === 'disputed' || currentStep === 'cancelled' || currentStep === 'expired' || currentStep === 'deleted') {
+    const isPaymentReleased = productData.paymentReleased || paymentReleased;
+
     return (
       <div className="min-h-screen bg-gray-50 py-4 sm:py-8">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -1237,9 +1390,43 @@ const BuyerPaymentPage = () => {
               )}
               
               {currentStep === 'delivered' && (
-                <p className="text-blue-600 mb-4 text-sm">
-                  Your order has been delivered. Please confirm receipt to release payment to the seller.
-                </p>
+                <div className="space-y-4">
+                  <p className="text-blue-600 mb-4 text-sm">
+                    Your order has been delivered. Please confirm receipt to release payment to the seller.
+                  </p>
+                  
+                  {/* ✅ ADDED: Auto-release countdown for delivered status */}
+                  {timeUntilAutoRelease && !isPaymentReleased && (
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 max-w-md mx-auto">
+                      <div className="flex items-center justify-center space-x-2">
+                        <Clock className="h-4 w-4 text-yellow-600" />
+                        <div>
+                          <p className="text-sm font-medium text-yellow-800">Automatic Payment Release</p>
+                          <p className="text-xs text-yellow-700">
+                            Payment will be automatically released in: <strong>{timeUntilAutoRelease}</strong>
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ✅ ADDED: Payment released message */}
+                  {isPaymentReleased && (
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-3 max-w-md mx-auto">
+                      <div className="flex items-center justify-center space-x-2">
+                        <CheckCircle className="h-4 w-4 text-green-600" />
+                        <div>
+                          <p className="text-sm font-medium text-green-800">Payment Released</p>
+                          <p className="text-xs text-green-700">
+                            {productData.releasedAutomatically 
+                              ? 'Payment was automatically released to the seller.' 
+                              : 'Payment has been released to the seller.'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
               )}
 
               {/* ✅ NEW: Deleted order message */}
@@ -1308,6 +1495,54 @@ const BuyerPaymentPage = () => {
                         </a>
                       </div>
                     </div>
+                  )}
+                </div>
+              )}
+
+              {/* ✅ UPDATED: Action Buttons for Delivered Status */}
+              {currentStep === 'delivered' && !isPaymentReleased && (
+                <div className="bg-white rounded-lg p-4 mb-4 border border-blue-200">
+                  <h4 className="font-semibold mb-3 text-lg text-blue-900">Next Steps</h4>
+                  <p className="text-sm text-blue-800 mb-4">
+                    Please confirm that you have received your order as expected to release payment to the seller.
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <button
+                      onClick={confirmReceipt}
+                      disabled={loading}
+                      className="flex items-center justify-center space-x-2 bg-green-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-1"
+                    >
+                      <ThumbsUp className="h-5 w-5" />
+                      <span>{loading ? 'Confirming...' : 'Confirm Receipt'}</span>
+                    </button>
+                    
+                    <button
+                      onClick={reportDispute}
+                      className="flex items-center justify-center space-x-2 bg-red-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-red-700 transition-colors flex-1"
+                    >
+                      <Flag className="h-5 w-5" />
+                      <span>Report Dispute</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* ✅ UPDATED: Payment released message for delivered status */}
+              {currentStep === 'delivered' && isPaymentReleased && (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+                  <div className="flex items-center justify-center space-x-2 mb-2">
+                    <CheckCircle className="h-5 w-5 text-green-600" />
+                    <h4 className="font-semibold text-green-800">Payment Released</h4>
+                  </div>
+                  <p className="text-sm text-green-700">
+                    {productData.releasedAutomatically 
+                      ? 'Payment has been automatically released to the seller.' 
+                      : 'Payment has been released to the seller.'}
+                  </p>
+                  {productData.paymentReleasedAt && (
+                    <p className="text-xs text-green-600 mt-2">
+                      Released on: {new Date(productData.paymentReleasedAt).toLocaleString()}
+                    </p>
                   )}
                 </div>
               )}
@@ -1400,34 +1635,6 @@ const BuyerPaymentPage = () => {
                     <p className="text-xs text-gray-500">
                       Payment held securely until delivery confirmation
                     </p>
-                  </div>
-                </div>
-              )}
-
-              {/* ✅ UPDATED: Action Buttons for Delivered Status */}
-              {currentStep === 'delivered' && (
-                <div className="bg-white rounded-lg p-4 mb-4 border border-blue-200">
-                  <h4 className="font-semibold mb-3 text-lg text-blue-900">Next Steps</h4>
-                  <p className="text-sm text-blue-800 mb-4">
-                    Please confirm that you have received your order as expected to release payment to the seller.
-                  </p>
-                  <div className="flex flex-col sm:flex-row gap-3">
-                    <button
-                      onClick={confirmReceipt}
-                      disabled={loading}
-                      className="flex items-center justify-center space-x-2 bg-green-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-1"
-                    >
-                      <ThumbsUp className="h-5 w-5" />
-                      <span>{loading ? 'Confirming...' : 'Confirm Receipt'}</span>
-                    </button>
-                    
-                    <button
-                      onClick={reportDispute}
-                      className="flex items-center justify-center space-x-2 bg-red-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-red-700 transition-colors flex-1"
-                    >
-                      <Flag className="h-5 w-5" />
-                      <span>Report Dispute</span>
-                    </button>
                   </div>
                 </div>
               )}

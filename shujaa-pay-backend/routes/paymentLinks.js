@@ -1,5 +1,6 @@
 import express from 'express';
 import PaymentLink from '../models/PaymentLink.js';
+import Dispute from '../models/Dispute.js'; // ✅ Added Dispute model import
 import { authenticateToken } from '../middleware/auth.js';
 import { upload, handleUploadErrors } from '../middleware/upload.js';
 
@@ -317,119 +318,178 @@ router.post('/:linkId/receipt-confirmation', async (req, res) => {
   }
 });
 
+// ============================================================================
+// ✅ FIXED: BUYER CONFIRMATION ROUTES (No authentication required)
+// ============================================================================
+
 /**
- * @route   POST /api/payment-links/:linkId/dispute
- * @desc    Submit a dispute for an order
+ * @route   PUT /api/payment-links/:linkId/complete
+ * @desc    Mark order as completed when buyer confirms receipt (PUBLIC)
  */
-router.post('/:linkId/dispute', async (req, res) => {
+router.put('/:linkId/complete', async (req, res) => {
   try {
     const { linkId } = req.params;
     const {
-      reason,
-      description,
-      evidenceCount = 0,
-      submittedAt,
-      buyerName,
-      buyerPhone,
-      buyerEmail,
-      productName,
-      amount,
-      sellerId,
-      sellerName,
-      status = 'submitted'
+      status = 'completed',
+      completedAt,
+      paymentReleased = true,
+      paymentReleasedAt,
+      releasedAutomatically = false
     } = req.body;
 
-    console.log('🚨 Dispute submission request:', { linkId, ...req.body });
+    console.log('✅ Buyer confirming receipt for order:', linkId, {
+      status,
+      paymentReleased,
+      releasedAutomatically
+    });
 
-    // Update payment link status to 'disputed'
-    const updatedLink = await PaymentLink.findOneAndUpdate(
-      { linkId: linkId },
-      { 
-        status: 'disputed',
-        disputeReason: reason,
-        disputeDescription: description,
-        disputeSubmittedAt: submittedAt,
-        disputeStatus: status
-      },
-      { new: true }
-    );
-
-    if (!updatedLink) {
+    // Find payment link
+    const paymentLink = await PaymentLink.findOne({ linkId: linkId });
+    
+    if (!paymentLink) {
+      console.log('❌ Payment link not found:', linkId);
       return res.status(404).json({
         success: false,
         message: 'Payment link not found'
       });
     }
-
+    
+    // Only allow completion for delivered status
+    if (paymentLink.status !== 'delivered') {
+      console.log('❌ Cannot mark as completed - current status:', paymentLink.status);
+      return res.status(400).json({
+        success: false,
+        message: 'Can only confirm receipt for orders in delivered status'
+      });
+    }
+    
+    // Update status and payment release info
+    paymentLink.status = status;
+    paymentLink.completedAt = completedAt ? new Date(completedAt) : new Date();
+    paymentLink.paymentReleased = paymentReleased;
+    paymentLink.paymentReleasedAt = paymentReleasedAt ? new Date(paymentReleasedAt) : new Date();
+    paymentLink.releasedAutomatically = releasedAutomatically;
+    
+    await paymentLink.save();
+    
+    console.log('✅ Order marked as completed successfully:', linkId, {
+      status: paymentLink.status,
+      paymentReleased: paymentLink.paymentReleased,
+      releasedAutomatically: paymentLink.releasedAutomatically
+    });
+    
     res.json({
       success: true,
-      message: 'Dispute submitted successfully',
-      paymentLink: updatedLink
+      message: 'Order completed successfully. Payment has been released to the seller.',
+      paymentLink: {
+        linkId: paymentLink.linkId,
+        status: paymentLink.status,
+        completedAt: paymentLink.completedAt,
+        paymentReleased: paymentLink.paymentReleased,
+        paymentReleasedAt: paymentLink.paymentReleasedAt,
+        releasedAutomatically: paymentLink.releasedAutomatically
+      }
     });
-
   } catch (error) {
-    console.error('Error submitting dispute:', error);
+    console.error('❌ Error completing order:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to submit dispute',
+      message: 'Failed to complete order',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });
 
 /**
- * @route   GET /api/payment-links/:linkId/dispute
- * @desc    Get dispute details for a payment link
+ * @route   PUT /api/payment-links/:linkId/release-payment
+ * @desc    Automatically release payment after ETA + 24 hours (PUBLIC)
  */
-router.get('/:linkId/dispute', async (req, res) => {
+router.put('/:linkId/release-payment', async (req, res) => {
   try {
     const { linkId } = req.params;
-    
+    const {
+      releasedAt,
+      releasedAutomatically = true
+    } = req.body;
+
+    console.log('🕒 Auto-releasing payment for order:', linkId, {
+      releasedAutomatically
+    });
+
+    // Find payment link
     const paymentLink = await PaymentLink.findOne({ linkId: linkId });
     
     if (!paymentLink) {
+      console.log('❌ Payment link not found:', linkId);
       return res.status(404).json({
         success: false,
         message: 'Payment link not found'
       });
     }
-
-    // Check if dispute exists
-    if (!paymentLink.disputeReason) {
-      return res.status(404).json({
+    
+    // Only allow auto-release for delivered status
+    if (paymentLink.status !== 'delivered') {
+      console.log('❌ Cannot auto-release payment - current status:', paymentLink.status);
+      return res.status(400).json({
         success: false,
-        message: 'No dispute found for this payment link'
+        message: 'Can only auto-release payment for orders in delivered status'
       });
     }
-
-    const disputeInfo = {
-      reason: paymentLink.disputeReason,
-      description: paymentLink.disputeDescription,
-      submittedAt: paymentLink.disputeSubmittedAt,
-      status: paymentLink.disputeStatus,
-      buyerName: paymentLink.buyerName,
-      buyerPhone: paymentLink.buyerPhone,
-      productName: paymentLink.productName,
-      amount: paymentLink.productPrice
-    };
-
+    
+    // Check if payment is already released
+    if (paymentLink.paymentReleased) {
+      console.log('ℹ️ Payment already released for order:', linkId);
+      return res.json({
+        success: true,
+        message: 'Payment was already released',
+        paymentLink: {
+          linkId: paymentLink.linkId,
+          status: paymentLink.status,
+          paymentReleased: paymentLink.paymentReleased,
+          paymentReleasedAt: paymentLink.paymentReleasedAt
+        }
+      });
+    }
+    
+    // Update payment release info
+    paymentLink.status = 'completed';
+    paymentLink.paymentReleased = true;
+    paymentLink.paymentReleasedAt = releasedAt ? new Date(releasedAt) : new Date();
+    paymentLink.releasedAutomatically = releasedAutomatically;
+    paymentLink.completedAt = new Date();
+    
+    await paymentLink.save();
+    
+    console.log('✅ Payment auto-released successfully:', linkId, {
+      status: paymentLink.status,
+      paymentReleased: paymentLink.paymentReleased,
+      releasedAutomatically: paymentLink.releasedAutomatically
+    });
+    
     res.json({
       success: true,
-      dispute: disputeInfo
+      message: 'Payment automatically released to seller successfully',
+      paymentLink: {
+        linkId: paymentLink.linkId,
+        status: paymentLink.status,
+        paymentReleased: paymentLink.paymentReleased,
+        paymentReleasedAt: paymentLink.paymentReleasedAt,
+        releasedAutomatically: paymentLink.releasedAutomatically,
+        completedAt: paymentLink.completedAt
+      }
     });
-
   } catch (error) {
-    console.error('Error fetching dispute:', error);
+    console.error('❌ Error auto-releasing payment:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to fetch dispute',
+      message: 'Failed to auto-release payment',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });
 
 // ============================================================================
-// PROTECTED ROUTES (Authentication required)
+// PROTECTED ROUTES (Authentication required - Seller only)
 // ============================================================================
 
 /**
@@ -439,7 +499,7 @@ router.get('/:linkId/dispute', async (req, res) => {
 router.get('/seller/:sellerId', authenticateToken, async (req, res) => {
   try {
     const { sellerId } = req.params;
-    const authenticatedSellerId = req.user.id;
+    const authenticatedSellerId = req.user._id.toString();
 
     console.log('🔄 Fetching orders for seller:', sellerId, 'Authenticated:', authenticatedSellerId);
 
@@ -481,7 +541,7 @@ router.get('/seller/:sellerId', authenticateToken, async (req, res) => {
 router.delete('/:linkId', authenticateToken, async (req, res) => {
   try {
     const { linkId } = req.params;
-    const sellerId = req.user.id;
+    const sellerId = req.user._id.toString();
     
     console.log('🔄 Attempting to delete payment link:', linkId, 'by seller:', sellerId);
 
@@ -527,7 +587,7 @@ router.delete('/:linkId', authenticateToken, async (req, res) => {
     
     res.status(500).json({
       success: false,
-        message: 'Internal server error',
+      message: 'Internal server error',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
@@ -537,10 +597,10 @@ router.delete('/:linkId', authenticateToken, async (req, res) => {
  * @route   PUT /api/payment-links/:linkId/deliver
  * @desc    Mark order as delivered (for in_escrow or paid status)
  */
-router.put('/:linkId/deliver', authenticateToken, upload.single('deliveryReceipt'), handleUploadErrors, async (req, res) => {
+router.put('/:linkId/deliver', authenticateToken, upload.array('deliveryReceipt', 5), handleUploadErrors, async (req, res) => {
   try {
     const { linkId } = req.params;
-    const sellerId = req.user.id;
+    const sellerId = req.user._id.toString();
     
     console.log('🔄 Marking order as delivered:', linkId, 'by seller:', sellerId);
 
@@ -564,7 +624,7 @@ router.put('/:linkId/deliver', authenticateToken, upload.single('deliveryReceipt
       deliveryCompany,
       trackingNumber,
       notes,
-      hasFile: !!req.file
+      hasFiles: req.files ? req.files.length : 0
     });
 
     // ✅ Find payment link
@@ -624,17 +684,17 @@ router.put('/:linkId/deliver', authenticateToken, upload.single('deliveryReceipt
       deliveredAt: new Date()
     };
     
-    // ✅ Handle file upload properly
-    if (req.file) {
-      paymentLink.deliveryInfo.receipt = {
-        filename: req.file.filename,
-        originalName: req.file.originalname,
-        path: req.file.path,
-        mimetype: req.file.mimetype,
-        size: req.file.size,
+    // ✅ Handle multiple file uploads properly
+    if (req.files && req.files.length > 0) {
+      paymentLink.deliveryInfo.receipts = req.files.map(file => ({
+        filename: file.filename,
+        originalName: file.originalname,
+        path: file.path,
+        mimetype: file.mimetype,
+        size: file.size,
         uploadedAt: new Date()
-      };
-      console.log('📄 Receipt file added:', req.file.filename);
+      }));
+      console.log('📄 Receipt files added:', req.files.length);
     }
     
     await paymentLink.save();
@@ -692,7 +752,7 @@ router.put('/:linkId/deliver', authenticateToken, upload.single('deliveryReceipt
 router.get('/seller/:sellerId/orders', authenticateToken, async (req, res) => {
   try {
     const { sellerId } = req.params;
-    const authenticatedSellerId = req.user.id;
+    const authenticatedSellerId = req.user._id.toString();
     
     console.log('🔄 Fetching orders for seller:', sellerId, 'Authenticated:', authenticatedSellerId);
 
@@ -758,15 +818,15 @@ router.get('/seller/:sellerId/orders', authenticateToken, async (req, res) => {
 });
 
 /**
- * @route   PUT /api/payment-links/:linkId/complete
- * @desc    Mark order as completed (for delivered status)
+ * @route   PUT /api/payment-links/:linkId/seller-complete
+ * @desc    Mark order as completed by seller (for delivered status) - PROTECTED
  */
-router.put('/:linkId/complete', authenticateToken, async (req, res) => {
+router.put('/:linkId/seller-complete', authenticateToken, async (req, res) => {
   try {
     const { linkId } = req.params;
-    const sellerId = req.user.id;
+    const sellerId = req.user._id.toString();
     
-    console.log('🔄 Marking order as completed:', linkId, 'by seller:', sellerId);
+    console.log('🔄 Seller marking order as completed:', linkId, 'by seller:', sellerId);
 
     const paymentLink = await PaymentLink.findOne({ 
       linkId: linkId,
@@ -793,9 +853,13 @@ router.put('/:linkId/complete', authenticateToken, async (req, res) => {
     // Update status to completed
     paymentLink.status = 'completed';
     paymentLink.completedAt = new Date();
+    paymentLink.paymentReleased = true;
+    paymentLink.paymentReleasedAt = new Date();
+    paymentLink.releasedAutomatically = false;
+    
     await paymentLink.save();
     
-    console.log('✅ Order marked as completed successfully:', linkId);
+    console.log('✅ Order marked as completed by seller successfully:', linkId);
     
     res.json({
       success: true,
@@ -804,6 +868,168 @@ router.put('/:linkId/complete', authenticateToken, async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Error marking order as completed:', error);
+    
+    if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication failed. Please login again.'
+      });
+    }
+    
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// ============================================================================
+// ✅ NEW: DISPUTE INTEGRATION ROUTES
+// ============================================================================
+
+/**
+ * @route   PUT /api/payment-links/:linkId/dispute
+ * @desc    Update order status to disputed and create dispute record
+ */
+router.put('/:linkId/dispute', authenticateToken, async (req, res) => {
+  try {
+    const { linkId } = req.params;
+    const sellerId = req.user._id.toString();
+    const {
+      reason = 'Order issue - needs review',
+      description = 'Dispute created from order management'
+    } = req.body;
+
+    console.log('🚨 Creating dispute for order:', linkId, 'by seller:', sellerId);
+
+    // Find payment link
+    const paymentLink = await PaymentLink.findOne({ 
+      linkId: linkId,
+      sellerId: sellerId 
+    });
+    
+    if (!paymentLink) {
+      console.log('❌ Payment link not found:', linkId);
+      return res.status(404).json({
+        success: false,
+        message: 'Payment link not found'
+      });
+    }
+
+    // Check if order can be disputed (delivered or completed status)
+    const disputableStatuses = ['delivered', 'completed'];
+    if (!disputableStatuses.includes(paymentLink.status)) {
+      console.log('❌ Cannot create dispute - current status:', paymentLink.status);
+      return res.status(400).json({
+        success: false,
+        message: `Can only create disputes for orders in delivered or completed status. Current status: ${paymentLink.status}`
+      });
+    }
+
+    // Update payment link status to disputed
+    paymentLink.status = 'disputed';
+    paymentLink.updatedAt = new Date();
+    await paymentLink.save();
+
+    // Create dispute record
+    const dispute = new Dispute({
+      order_id: paymentLink.linkId,
+      seller_id: sellerId,
+      buyer_id: paymentLink.buyerEmail, // Using email as buyer ID for now
+      buyer_name: paymentLink.buyerName,
+      buyer_phone: paymentLink.buyerPhone,
+      product_name: paymentLink.productName,
+      amount: paymentLink.productPrice,
+      reason: reason,
+      description: description || `Dispute for order ${paymentLink.linkId}: ${paymentLink.productName}`,
+      status: 'opened',
+      timeline: [{
+        action: 'Dispute created from order management',
+        date: new Date().toLocaleString('en-US', {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        }),
+        user: req.user.name || 'Seller',
+        type: 'seller'
+      }]
+    });
+
+    await dispute.save();
+
+    console.log('✅ Dispute created successfully:', dispute.dispute_id);
+
+    res.json({
+      success: true,
+      message: 'Dispute created successfully',
+      dispute: {
+        dispute_id: dispute.dispute_id,
+        order_id: dispute.order_id,
+        status: dispute.status,
+        reason: dispute.reason
+      },
+      paymentLink: {
+        linkId: paymentLink.linkId,
+        status: paymentLink.status,
+        updatedAt: paymentLink.updatedAt
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error creating dispute:', error);
+    
+    if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication failed. Please login again.'
+      });
+    }
+    
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+/**
+ * @route   GET /api/payment-links/:linkId/dispute-status
+ * @desc    Check if an order has an existing dispute
+ */
+router.get('/:linkId/dispute-status', authenticateToken, async (req, res) => {
+  try {
+    const { linkId } = req.params;
+    const sellerId = req.user._id.toString();
+
+    console.log('🔍 Checking dispute status for order:', linkId);
+
+    // Check if dispute exists for this order
+    const existingDispute = await Dispute.findOne({ 
+      order_id: linkId,
+      seller_id: sellerId 
+    });
+
+    const hasDispute = !!existingDispute;
+
+    console.log('✅ Dispute status checked:', { linkId, hasDispute });
+
+    res.json({
+      success: true,
+      hasDispute: hasDispute,
+      dispute: hasDispute ? {
+        dispute_id: existingDispute.dispute_id,
+        status: existingDispute.status,
+        reason: existingDispute.reason,
+        created_at: existingDispute.created_at
+      } : null
+    });
+
+  } catch (error) {
+    console.error('❌ Error checking dispute status:', error);
     
     if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
       return res.status(401).json({
@@ -865,7 +1091,7 @@ router.get('/', authenticateToken, async (req, res) => {
 router.put('/:linkId/cancel', authenticateToken, async (req, res) => {
   try {
     const { linkId } = req.params;
-    const sellerId = req.user.id;
+    const sellerId = req.user._id.toString();
     
     console.log('🔄 Canceling payment link:', linkId, 'by seller:', sellerId);
 
@@ -936,7 +1162,7 @@ router.get('/test-auth', authenticateToken, (req, res) => {
     user: {
       id: req.user._id,
       email: req.user.email,
-      name: req.user.fullName
+      name: req.user.name
     },
     timestamp: new Date().toISOString()
   });

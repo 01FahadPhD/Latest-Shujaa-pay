@@ -1,11 +1,14 @@
 import '../styles/globals.css';
-import { LayoutProvider } from '../contexts/LayoutContext';
+import { AuthProvider } from '../contexts/AuthContext';
+import { LayoutProvider } from '../contexts/LayoutContext'; // if also named export
 
 function MyApp({ Component, pageProps }) {
   return (
-    <LayoutProvider>
-      <Component {...pageProps} />
-    </LayoutProvider>
+    <AuthProvider>
+      <LayoutProvider>
+        <Component {...pageProps} />
+      </LayoutProvider>
+    </AuthProvider>
   );
 }
 
