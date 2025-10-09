@@ -1,10 +1,9 @@
-// models/User.js
 import mongoose from 'mongoose';
 
 const refreshTokenSchema = new mongoose.Schema({
-  tokenHash: { type: String, required: true }, // hashed refresh token
+  tokenHash: { type: String, required: true },
   createdAt: { type: Date, default: Date.now },
-  userAgent: { type: String, default: '' } // optional: for multi-device tracking
+  userAgent: { type: String, default: '' }
 });
 
 const userSchema = new mongoose.Schema({
@@ -41,6 +40,11 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: true,
     minlength: 6
+  },
+  role: {
+    type: String,
+    enum: ['seller', 'admin'],
+    default: 'seller'
   },
   refreshTokens: {
     type: [refreshTokenSchema],

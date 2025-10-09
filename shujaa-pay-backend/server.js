@@ -1,10 +1,13 @@
+// Load env variables first
+import dotenv from 'dotenv';
+dotenv.config();
+
 // =============================
 // ✅ Imports & Config
 // =============================
 import express from "express";
 import mongoose from "mongoose";
 import cors from "cors";
-import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
 import cookieParser from "cookie-parser";
@@ -12,8 +15,10 @@ import fs from "fs";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 
+
 // Models
-import User from "./models/User.js"; // 🎯 Required for seller profile route
+import User from "./models/User.js";
+import PaymentLink from "./models/PaymentLink.js"; // 🆕 Added for payouts route
 
 // Routes
 import connectDB from "./config/db.js";
@@ -21,9 +26,6 @@ import authRoutes from "./routes/auth.js";
 import paymentRoutes from "./routes/payments.js";
 import paymentLinkRoutes from "./routes/paymentLinks.js";
 import disputeRoutes from "./routes/disputes.js";
-
-// Load env variables first
-dotenv.config();
 
 // ES modules __dirname
 const __filename = fileURLToPath(import.meta.url);
@@ -85,11 +87,19 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads"))); // ✅ Ser
 app.use(cookieParser()); // ✅ add this before routes
 
 // =============================
-// ✅ Request Logging Middleware
+// 🔍 Enhanced Request Logging Middleware
 // =============================
 app.use((req, res, next) => {
   const timestamp = new Date().toISOString();
-  console.log(`[${timestamp}] ${req.method} ${req.originalUrl}`);
+  console.log(`\n🔍 [${timestamp}] ${req.method} ${req.originalUrl}`);
+  
+  // Log request parameters and query
+  if (Object.keys(req.params).length > 0) {
+    console.log(`📋 Params:`, req.params);
+  }
+  if (Object.keys(req.query).length > 0) {
+    console.log(`❓ Query:`, req.query);
+  }
   
   // Log request body (excluding sensitive fields in production)
   if (process.env.NODE_ENV !== 'production' && req.body) {
@@ -98,9 +108,10 @@ app.use((req, res, next) => {
     if (logBody.password) logBody.password = '***';
     if (logBody.token) logBody.token = '***';
     if (logBody.cardNumber) logBody.cardNumber = '***';
+    if (logBody.cvv) logBody.cvv = '***';
     
     if (Object.keys(logBody).length > 0) {
-      console.log('Request body:', logBody);
+      console.log('📦 Request body:', logBody);
     }
   }
   next();
@@ -134,12 +145,201 @@ app.get("/api/health", (req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/payment-links", paymentLinkRoutes);
 app.use("/api/payments", paymentRoutes);
-app.use("/api/disputes", disputeRoutes); // 🆕 Added disputes routes
+app.use("/api/disputes", disputeRoutes);
 
-// Seller profile route (requires User model)
+// =============================
+// ✅ Payouts Routes (NEW)
+// =============================
+app.get("/api/payouts/seller/:sellerId", async (req, res) => {
+  try {
+    const { sellerId } = req.params;
+    console.log(`📊 Fetching payouts for seller: ${sellerId}`);
+    
+    // Validate sellerId
+    if (!mongoose.Types.ObjectId.isValid(sellerId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid seller ID format"
+      });
+    }
+
+    // Verify seller exists
+    const seller = await User.findById(sellerId);
+    if (!seller) {
+      return res.status(404).json({
+        success: false,
+        message: "Seller not found"
+      });
+    }
+
+    // Get payment links for this seller
+    const paymentLinks = await PaymentLink.find({ seller: sellerId })
+      .sort({ createdAt: -1 });
+
+    console.log(`📊 Found ${paymentLinks.length} payment links for seller ${sellerId}`);
+
+    // Calculate payout stats based on business logic
+    const payoutStats = {
+      available: 0,
+      inEscrow: 0,
+      refunded: 0,
+      withdrawn: 0,
+      totalSales: 0
+    };
+
+    // Transform payment links to payout format
+    const payouts = paymentLinks.map(link => {
+      const amount = parseInt(link.productPrice) || 0;
+      let status = 'in_escrow';
+      let payoutStatus = 'pending';
+
+      // Calculate stats and determine payout status
+      if (link.status === 'completed' && !link.payoutProcessed) {
+        payoutStats.available += amount;
+        status = 'available';
+        payoutStatus = 'ready_for_withdrawal';
+      } else if (['paid', 'delivered', 'disputed'].includes(link.status)) {
+        payoutStats.inEscrow += amount;
+        status = 'in_escrow';
+        payoutStatus = 'held';
+      } else if (link.status === 'refunded') {
+        payoutStats.refunded += amount;
+        status = 'refunded';
+        payoutStatus = 'refunded';
+      } else if (link.status === 'completed' && link.payoutProcessed) {
+        payoutStats.withdrawn += amount;
+        status = 'withdrawn';
+        payoutStatus = 'completed';
+      }
+
+      // Always add to total sales
+      payoutStats.totalSales += amount;
+
+      return {
+        id: `PYT-${link._id}`,
+        orderId: link._id,
+        product: link.productName || 'Unknown Product',
+        amount: amount,
+        method: 'mobile_money', // Default method
+        status: status,
+        payoutStatus: payoutStatus,
+        date: link.updatedAt || link.createdAt,
+        provider: 'M-Pesa', // Default provider
+        phoneNumber: seller.phone || '+255 XXX XXX XXX',
+        originalOrder: {
+          status: link.status,
+          createdAt: link.createdAt,
+          updatedAt: link.updatedAt
+        },
+        source: 'api'
+      };
+    });
+
+    res.json({
+      success: true,
+      message: "Payouts data retrieved successfully",
+      payoutStats,
+      payouts,
+      sellerInfo: {
+        id: seller._id,
+        name: seller.name,
+        email: seller.email,
+        phone: seller.phone,
+        businessName: seller.businessName
+      },
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error("❌ Error fetching payouts:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch payout data",
+      error: process.env.NODE_ENV === 'production' ? 'Internal server error' : error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// Withdrawal processing endpoint
+app.post("/api/payouts/withdraw", async (req, res) => {
+  try {
+    const { sellerId, amount, method, provider, phoneNumber } = req.body;
+
+    console.log(`💳 Withdrawal request from seller ${sellerId}: ${amount} via ${method}`);
+
+    // Validate required fields
+    if (!sellerId || !amount || !method) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing required fields: sellerId, amount, method"
+      });
+    }
+
+    // Validate seller
+    if (!mongoose.Types.ObjectId.isValid(sellerId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid seller ID"
+      });
+    }
+
+    const seller = await User.findById(sellerId);
+    if (!seller) {
+      return res.status(404).json({
+        success: false,
+        message: "Seller not found"
+      });
+    }
+
+    // In a real implementation, you would:
+    // 1. Check available balance
+    // 2. Process the withdrawal with payment provider
+    // 3. Update database records
+    // 4. Send confirmation
+
+    // Simulate processing delay
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    // Create withdrawal record (in real app, save to database)
+    const withdrawalRecord = {
+      id: `WTH-${Date.now()}`,
+      sellerId: sellerId,
+      amount: parseInt(amount),
+      method: method,
+      provider: provider || 'M-Pesa',
+      phoneNumber: phoneNumber,
+      status: 'processed',
+      processedAt: new Date().toISOString(),
+      transactionId: `TXN-${Math.random().toString(36).substr(2, 9).toUpperCase()}`
+    };
+
+    console.log(`✅ Withdrawal processed: ${withdrawalRecord.transactionId}`);
+
+    res.json({
+      success: true,
+      message: "Withdrawal processed successfully",
+      withdrawal: withdrawalRecord,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error("❌ Error processing withdrawal:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to process withdrawal",
+      error: process.env.NODE_ENV === 'production' ? 'Internal server error' : error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// Seller profile route
 app.get("/api/sellers/:sellerId", async (req, res) => {
   try {
     const { sellerId } = req.params;
+    console.log(`👤 Fetching seller profile: ${sellerId}`);
+    
     const seller = await User.findById(sellerId).select("-password");
 
     if (!seller) {
@@ -168,7 +368,7 @@ app.get("/api/sellers/:sellerId", async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Error fetching seller profile:", error);
+    console.error("❌ Error fetching seller profile:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch seller profile",
@@ -181,10 +381,22 @@ app.get("/api/sellers/:sellerId", async (req, res) => {
 // ❌ 404 API Handler (ENHANCED)
 // =============================
 app.use(/\/api\/(.*)/, (req, res) => {
+  console.log(`❌ 404 - API Route not found: ${req.method} ${req.originalUrl}`);
+  console.log(`❌ Request details:`, {
+    method: req.method,
+    url: req.originalUrl,
+    params: req.params,
+    query: req.query,
+    ip: req.ip,
+    userAgent: req.get('User-Agent')
+  });
+  
   res.status(404).json({
     success: false,
     error: "API endpoint not found",
     path: req.originalUrl,
+    method: req.method,
+    timestamp: new Date().toISOString(),
     availableEndpoints: [
       "GET /api/test",
       "GET /api/health",
@@ -208,7 +420,11 @@ app.use(/\/api\/(.*)/, (req, res) => {
       "GET /api/payments/seller/:sellerId",
       "GET /api/payments/:paymentId",
       
-      // 🆕 Enhanced Disputes endpoints
+      // 🆕 Payouts endpoints
+      "GET /api/payouts/seller/:sellerId",
+      "POST /api/payouts/withdraw",
+      
+      // Disputes endpoints
       "GET /api/disputes/seller/:sellerId",
       "GET /api/disputes/:disputeId",
       "POST /api/disputes/:disputeId/seller-evidence",
@@ -220,8 +436,7 @@ app.use(/\/api\/(.*)/, (req, res) => {
       "POST /api/payment-links/:linkId/dispute",
       "GET /api/disputes/search/global",
       "GET /api/disputes/filters/options"
-    ],
-    timestamp: new Date().toISOString()
+    ]
   });
 });
 
@@ -248,6 +463,48 @@ app.use((error, req, res, next) => {
     ip: req.ip
   });
   
+  // Mongoose validation errors
+  if (error.name === 'ValidationError') {
+    const errors = Object.values(error.errors).map(err => err.message);
+    return res.status(400).json({
+      success: false,
+      message: 'Validation failed',
+      errors: errors
+    });
+  }
+
+  // MongoDB duplicate key errors
+  if (error.code === 11000) {
+    const field = Object.keys(error.keyValue)[0];
+    return res.status(400).json({
+      success: false,
+      message: `${field} already exists`
+    });
+  }
+
+  // MongoDB CastError (invalid ObjectId)
+  if (error.name === 'CastError') {
+    return res.status(400).json({
+      success: false,
+      message: 'Invalid ID format'
+    });
+  }
+
+  // JWT errors
+  if (error.name === 'JsonWebTokenError') {
+    return res.status(401).json({
+      success: false,
+      message: 'Invalid token'
+    });
+  }
+
+  if (error.name === 'TokenExpiredError') {
+    return res.status(401).json({
+      success: false,
+      message: 'Token expired'
+    });
+  }
+
   // Multer file upload errors
   if (error.code === 'LIMIT_FILE_SIZE') {
     return res.status(400).json({
@@ -270,44 +527,12 @@ app.use((error, req, res, next) => {
     });
   }
 
-  // MongoDB duplicate key errors
-  if (error.code === 11000) {
-    return res.status(400).json({
-      success: false,
-      message: 'Duplicate entry found.'
-    });
-  }
-
-  // MongoDB validation errors
-  if (error.name === 'ValidationError') {
-    const errors = Object.values(error.errors).map(err => err.message);
-    return res.status(400).json({
-      success: false,
-      message: 'Validation failed',
-      errors: errors
-    });
-  }
-
-  // JWT errors
-  if (error.name === 'JsonWebTokenError') {
-    return res.status(401).json({
-      success: false,
-      message: 'Invalid token'
-    });
-  }
-
-  if (error.name === 'TokenExpiredError') {
-    return res.status(401).json({
-      success: false,
-      message: 'Token expired'
-    });
-  }
-
   // Default error response
-  res.status(error.status || 500).json({
+  const statusCode = error.status || 500;
+  res.status(statusCode).json({
     success: false,
-    message: "Internal server error",
-    error: process.env.NODE_ENV === "production" ? {} : error.message,
+    message: statusCode === 500 ? "Internal server error" : error.message,
+    error: process.env.NODE_ENV === "production" && statusCode === 500 ? {} : error.message,
     ...(process.env.NODE_ENV !== "production" && { stack: error.stack })
   });
 });
@@ -343,14 +568,23 @@ process.on('SIGTERM', () => {
 // 🚀 Start Server
 // =============================
 const server = app.listen(PORT, () => {
+  console.log(`\n🎉 ==========================================`);
   console.log(`🎉 Server running on port ${PORT}`);
+  console.log(`🎉 ==========================================`);
   console.log(`🌐 Environment: ${process.env.NODE_ENV || "development"}`);
   console.log(`🔗 API Base URL: http://localhost:${PORT}/api`);
   console.log(`🔗 Frontend URL: ${process.env.FRONTEND_URL || "http://localhost:3000"}`);
-  console.log(`📁 Uploads: http://localhost:${PORT}/uploads`); // ✅ Multer uploads accessible
+  console.log(`📁 Uploads: http://localhost:${PORT}/uploads`);
+  console.log(`💰 Payouts API: http://localhost:${PORT}/api/payouts/seller/:sellerId`);
+  console.log(`💳 Withdrawals: http://localhost:${PORT}/api/payouts/withdraw`);
   console.log(`⚖️ Disputes API: http://localhost:${PORT}/api/disputes`);
   console.log(`🛡️ Rate limiting: ${process.env.NODE_ENV === 'production' ? 'Enabled' : 'Development mode'}`);
   console.log(`📁 Uploads directory: ${uploadsDir}`);
+  console.log(`🎉 ==========================================\n`);
+  console.log('JWT_SECRET:', process.env.JWT_SECRET);
 });
+
+export const JWT_SECRET = process.env.JWT_SECRET;
+export const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET;
 
 export default app;
